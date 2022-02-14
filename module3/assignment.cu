@@ -63,37 +63,36 @@ int main(int argc, char **argv)
 {
 
 	// read command line arguments
-	if (argc != 3)
-	{
-		printf("Must provide 2 command line arguments\n");
-		return EXIT_FAILURE;
+	unsigned int totalThreads = (1 << 20);
+	unsigned int blockSize = 256;
+	
+	if (argc >= 2) {
+		totalThreads = atoi(argv[1]);
+	}
+	if (argc >= 3) {
+		blockSize = atoi(argv[2]);
 	}
 
-	int totalThreads = atoi(argv[1]);
-	int blockSize = atoi(argv[2]);
-	int numBlocks = totalThreads / blockSize;
+	int numBlocks = totalThreads/blockSize;
 
 	// validate command line arguments
-	if (totalThreads % blockSize != 0)
-	{
+	if (totalThreads % blockSize != 0) {
 		++numBlocks;
-		totalThreads = numBlocks * blockSize;
-
+		totalThreads = numBlocks*blockSize;
+		
 		printf("Warning: Total thread count is not evenly divisible by the block size\n");
 		printf("The total number of threads will be rounded up to %d\n", totalThreads);
-
-		// TODO we should probably fail here too
 	}
 
 	size_t dataSizeBytes = sizeof(unsigned int) * totalThreads;
 
 	// TODO we need to create 3 arrays... one that contains numeric values in the array, and 1 with random values 0-3, and 1 for the results!
-	unsigned int firstInputCpu[totalThreads];
-	unsigned int secondInputCpu[totalThreads];
-	unsigned int addResultCpu[totalThreads];
-	unsigned int subtractResultCpu[totalThreads];
-	unsigned int multResultCpu[totalThreads];
-	unsigned int modResultCpu[totalThreads];
+	unsigned int *firstInputCpu = new unsigned int[totalThreads];
+	unsigned int *secondInputCpu = new unsigned int[totalThreads];
+	unsigned int *addResultCpu = new unsigned int[totalThreads];
+	unsigned int *subtractResultCpu = new unsigned int[totalThreads];
+	unsigned int *multResultCpu = new unsigned int[totalThreads];
+	unsigned int *modResultCpu = new unsigned int[totalThreads];
 
 	unsigned int *firstInputGpu;
 	unsigned int *secondInputGpu;
@@ -137,6 +136,13 @@ int main(int argc, char **argv)
 	cudaFree(firstInputGpu);
 	cudaFree(secondInputGpu);
 	cudaFree(operationResultGpu);
+
+	delete[] firstInputCpu;
+	delete[] secondInputCpu;
+	delete[] addResultCpu;
+	delete[] subtractResultCpu;
+	delete[] multResultCpu;
+	delete[] modResultCpu;
 
 	// for (unsigned int i = 0; i < totalThreads; i++) {
 	// 	printf("%d -> %d\n", firstInputCpu[i], secondInputCpu[i]);
