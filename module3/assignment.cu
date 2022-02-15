@@ -65,21 +65,32 @@ int main(int argc, char **argv)
 	// read command line arguments
 	unsigned int totalThreads = (1 << 20);
 	unsigned int blockSize = 256;
-	
-	if (argc >= 2) {
+
+	if (argc >= 2)
+	{
 		totalThreads = atoi(argv[1]);
 	}
-	if (argc >= 3) {
+	else
+	{
+		printf("Using default total threads %d", totalThreads);
+	}
+	if (argc >= 3)
+	{
 		blockSize = atoi(argv[2]);
 	}
+	else
+	{
+		printf("Using default block size %d", blockSize);
+	}
 
-	int numBlocks = totalThreads/blockSize;
+	int numBlocks = totalThreads / blockSize;
 
 	// validate command line arguments
-	if (totalThreads % blockSize != 0) {
+	if (totalThreads % blockSize != 0)
+	{
 		++numBlocks;
-		totalThreads = numBlocks*blockSize;
-		
+		totalThreads = numBlocks * blockSize;
+
 		printf("Warning: Total thread count is not evenly divisible by the block size\n");
 		printf("The total number of threads will be rounded up to %d\n", totalThreads);
 	}
@@ -121,17 +132,41 @@ int main(int argc, char **argv)
 
 	normalize_second_array<<<numBlocks, blockSize>>>(secondInputGpu);
 
+	// copy inputs back to cpu for printing
+	cudaMemcpy(firstInputCpu, firstInputGpu, dataSizeBytes, cudaMemcpyDeviceToHost);
+	cudaMemcpy(secondInputCpu, secondInputGpu, dataSizeBytes, cudaMemcpyDeviceToHost);
+
 	add<<<numBlocks, blockSize>>>(operationResultGpu, firstInputGpu, secondInputGpu);
 	cudaMemcpy(addResultCpu, operationResultGpu, dataSizeBytes, cudaMemcpyDeviceToHost);
+
+	for (unsigned int i = 0; i < totalThreads; i++)
+	{
+		printf("%d + %d = %d\n", firstInputCpu[i], secondInputCpu[i], addResultCpu[i]);
+	}
 
 	subtract<<<numBlocks, blockSize>>>(operationResultGpu, firstInputGpu, secondInputGpu);
 	cudaMemcpy(subtractResultCpu, operationResultGpu, dataSizeBytes, cudaMemcpyDeviceToHost);
 
+	for (unsigned int i = 0; i < totalThreads; i++)
+	{
+		printf("%d - %d = %d\n", firstInputCpu[i], secondInputCpu[i], subtractResultCpu[i]);
+	}
+
 	mult<<<numBlocks, blockSize>>>(operationResultGpu, firstInputGpu, secondInputGpu);
 	cudaMemcpy(multResultCpu, operationResultGpu, dataSizeBytes, cudaMemcpyDeviceToHost);
 
+	for (unsigned int i = 0; i < totalThreads; i++)
+	{
+		printf("%d * %d = %d\n", firstInputCpu[i], secondInputCpu[i], multResultCpu[i]);
+	}
+
 	mod<<<numBlocks, blockSize>>>(operationResultGpu, firstInputGpu, secondInputGpu);
 	cudaMemcpy(modResultCpu, operationResultGpu, dataSizeBytes, cudaMemcpyDeviceToHost);
+
+	for (unsigned int i = 0; i < totalThreads; i++)
+	{
+		printf("%d %% %d = %d\n", firstInputCpu[i], secondInputCpu[i], modResultCpu[i]);
+	}
 
 	cudaFree(firstInputGpu);
 	cudaFree(secondInputGpu);
@@ -143,11 +178,6 @@ int main(int argc, char **argv)
 	delete[] subtractResultCpu;
 	delete[] multResultCpu;
 	delete[] modResultCpu;
-
-	// for (unsigned int i = 0; i < totalThreads; i++) {
-	// 	printf("%d -> %d\n", firstInputCpu[i], secondInputCpu[i]);
-
-	// }
 
 	return EXIT_SUCCESS;
 }
