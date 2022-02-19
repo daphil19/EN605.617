@@ -11,6 +11,8 @@
 #include <stdlib.h>
 #include <assert.h>
 
+// nvcc global_memory.cu -lcudart -o global_memory
+
 static const int WORK_SIZE = 256;
 
 #define NUM_ELEMENTS 4096

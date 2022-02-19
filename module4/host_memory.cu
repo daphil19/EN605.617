@@ -1,6 +1,7 @@
 #include <stdio.h>
 
 //From https://devblogs.nvidia.com/parallelforall/easy-introduction-cuda-c-and-c/
+// nvcc host_memory.cu -L /usr/local/cuda/lib -lcudart -o host_memory
 
 __global__
 void saxpy(int n, float a, float *x, float *y)
