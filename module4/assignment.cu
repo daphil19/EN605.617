@@ -11,14 +11,16 @@
 
 // TODO if I had thought about this more I probably would have used a class instead of structs
 
-typedef struct {
-	unsigned int * firstInputCpu;
-	unsigned int * secondInputCpu;
-	unsigned int * firstInputGpu;
-	unsigned int * secondInputGpu;
+typedef struct
+{
+	unsigned int *firstInputCpu;
+	unsigned int *secondInputCpu;
+	unsigned int *firstInputGpu;
+	unsigned int *secondInputGpu;
 } INPUT_ARRAYS_T;
 
-typedef struct {
+typedef struct
+{
 	unsigned int *operationResultGpu;
 	unsigned int *addResultCpu;
 	unsigned int *subtractResultCpu;
@@ -26,28 +28,30 @@ typedef struct {
 	unsigned int *modResultCpu;
 } OUTPUT_ARRAYS_T;
 
-typedef struct {
+typedef struct
+{
 	unsigned int totalThreads;
 	unsigned int blockSize;
 	unsigned int numBlocks;
 	size_t dataSizeBytes;
 } INPUT_PARAMS_T;
 
-void allocate_paged_inputs(INPUT_PARAMS_T* inputParams, INPUT_ARRAYS_T* input, OUTPUT_ARRAYS_T * output) {
-		input->firstInputCpu = new unsigned int[inputParams->totalThreads];
-		input->secondInputCpu = new unsigned int[inputParams->totalThreads]; 
-		cudaMalloc((void **)&(input->firstInputGpu), inputParams->dataSizeBytes);
-		cudaMalloc((void **)&(input->secondInputGpu), inputParams->dataSizeBytes);
+void allocate_paged_inputs(INPUT_PARAMS_T *inputParams, INPUT_ARRAYS_T *input, OUTPUT_ARRAYS_T *output)
+{
+	input->firstInputCpu = new unsigned int[inputParams->totalThreads];
+	input->secondInputCpu = new unsigned int[inputParams->totalThreads];
+	cudaMalloc((void **)&(input->firstInputGpu), inputParams->dataSizeBytes);
+	cudaMalloc((void **)&(input->secondInputGpu), inputParams->dataSizeBytes);
 
-		cudaMalloc((void**)&(output->operationResultGpu), inputParams->dataSizeBytes);
-		output->addResultCpu = new unsigned int[inputParams->totalThreads];
-		output->subtractResultCpu = new unsigned int[inputParams->totalThreads];
-		output->multResultCpu = new unsigned int[inputParams->totalThreads];
-		output->modResultCpu = new unsigned int[inputParams->totalThreads];
-
+	cudaMalloc((void **)&(output->operationResultGpu), inputParams->dataSizeBytes);
+	output->addResultCpu = new unsigned int[inputParams->totalThreads];
+	output->subtractResultCpu = new unsigned int[inputParams->totalThreads];
+	output->multResultCpu = new unsigned int[inputParams->totalThreads];
+	output->modResultCpu = new unsigned int[inputParams->totalThreads];
 }
 
-void cleanup_paged_inputs(INPUT_ARRAYS_T* input, OUTPUT_ARRAYS_T* output) {
+void cleanup_paged_inputs(INPUT_ARRAYS_T *input, OUTPUT_ARRAYS_T *output)
+{
 	delete[] input->firstInputCpu;
 	delete[] input->secondInputCpu;
 	cudaFree(input->firstInputGpu);
@@ -60,20 +64,22 @@ void cleanup_paged_inputs(INPUT_ARRAYS_T* input, OUTPUT_ARRAYS_T* output) {
 	delete[] output->modResultCpu;
 }
 
-void allocate_pinned_inputs(INPUT_PARAMS_T* inputParams, INPUT_ARRAYS_T* input, OUTPUT_ARRAYS_T* output) {
-		cudaMallocHost((void **)&(input->firstInputCpu), inputParams->dataSizeBytes);
-		cudaMallocHost((void **)&(input->secondInputCpu), inputParams->dataSizeBytes);
-		cudaMalloc((void **)&(input->firstInputGpu), inputParams->dataSizeBytes);
-		cudaMalloc((void **)&(input->secondInputGpu), inputParams->dataSizeBytes);
+void allocate_pinned_inputs(INPUT_PARAMS_T *inputParams, INPUT_ARRAYS_T *input, OUTPUT_ARRAYS_T *output)
+{
+	cudaMallocHost((void **)&(input->firstInputCpu), inputParams->dataSizeBytes);
+	cudaMallocHost((void **)&(input->secondInputCpu), inputParams->dataSizeBytes);
+	cudaMalloc((void **)&(input->firstInputGpu), inputParams->dataSizeBytes);
+	cudaMalloc((void **)&(input->secondInputGpu), inputParams->dataSizeBytes);
 
-		cudaMalloc((void**)&(output->operationResultGpu), inputParams->dataSizeBytes);
-		cudaMallocHost((void **)&(output->addResultCpu), inputParams->dataSizeBytes);
-		cudaMallocHost((void **)&(output->subtractResultCpu), inputParams->dataSizeBytes);
-		cudaMallocHost((void **)&(output->multResultCpu), inputParams->dataSizeBytes);
-		cudaMallocHost((void **)&(output->modResultCpu), inputParams->dataSizeBytes);
+	cudaMalloc((void **)&(output->operationResultGpu), inputParams->dataSizeBytes);
+	cudaMallocHost((void **)&(output->addResultCpu), inputParams->dataSizeBytes);
+	cudaMallocHost((void **)&(output->subtractResultCpu), inputParams->dataSizeBytes);
+	cudaMallocHost((void **)&(output->multResultCpu), inputParams->dataSizeBytes);
+	cudaMallocHost((void **)&(output->modResultCpu), inputParams->dataSizeBytes);
 }
 
-void cleanup_pinned_inputs(INPUT_ARRAYS_T* input, OUTPUT_ARRAYS_T* output) {
+void cleanup_pinned_inputs(INPUT_ARRAYS_T *input, OUTPUT_ARRAYS_T *output)
+{
 	cudaFreeHost(input->firstInputCpu);
 	cudaFreeHost(input->secondInputCpu);
 	cudaFree(input->firstInputGpu);
@@ -86,8 +92,10 @@ void cleanup_pinned_inputs(INPUT_ARRAYS_T* input, OUTPUT_ARRAYS_T* output) {
 	cudaFreeHost(output->modResultCpu);
 }
 
-void initialize_inputs(INPUT_PARAMS_T* inputParams, INPUT_ARRAYS_T* input) {
-		for (int i = 0; i < inputParams->totalThreads; i++) {
+void initialize_inputs(INPUT_PARAMS_T *inputParams, INPUT_ARRAYS_T *input)
+{
+	for (int i = 0; i < inputParams->totalThreads; i++)
+	{
 		input->firstInputCpu[i] = i;
 		input->secondInputCpu[i] = rand() % RANDOM_RANGE;
 	}
@@ -101,13 +109,12 @@ __host__ cudaEvent_t get_time(void)
 	return time;
 }
 
-float perform_operations(INPUT_PARAMS_T * inputParams, INPUT_ARRAYS_T* input, OUTPUT_ARRAYS_T* output) {
+float perform_operations(INPUT_PARAMS_T *inputParams, INPUT_ARRAYS_T *input, OUTPUT_ARRAYS_T *output)
+{
 	cudaEvent_t start_time = get_time();
-
 
 	cudaMemcpy(input->firstInputGpu, input->firstInputCpu, inputParams->dataSizeBytes, cudaMemcpyHostToDevice);
 	cudaMemcpy(input->secondInputGpu, input->secondInputCpu, inputParams->dataSizeBytes, cudaMemcpyHostToDevice);
-
 
 	add<<<inputParams->numBlocks, inputParams->blockSize>>>(output->operationResultGpu, input->firstInputGpu, input->secondInputGpu);
 
@@ -142,13 +149,12 @@ float perform_operations(INPUT_PARAMS_T * inputParams, INPUT_ARRAYS_T* input, OU
 		printf("%d %% %d = %d\n", input->firstInputCpu[i], input->secondInputCpu[i], output->modResultCpu[i]);
 	}
 
-		cudaEvent_t end_time = get_time();
+	cudaEvent_t end_time = get_time();
 	cudaEventSynchronize(end_time);
 
 	float delta = 0;
 	cudaEventElapsedTime(&delta, start_time, end_time);
 	return delta;
-
 }
 
 int main(int argc, char **argv)
@@ -190,10 +196,10 @@ int main(int argc, char **argv)
 	size_t dataSizeBytes = sizeof(unsigned int) * totalThreads;
 
 	INPUT_PARAMS_T inputParams = {
-	totalThreads,
-	blockSize,
-	numBlocks,
-	dataSizeBytes,
+		totalThreads,
+		blockSize,
+		numBlocks,
+		dataSizeBytes,
 	};
 
 	INPUT_ARRAYS_T input;
