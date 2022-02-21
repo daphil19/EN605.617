@@ -91,13 +91,24 @@ void initialize_inputs(INPUT_PARAMS_T* inputParams, INPUT_ARRAYS_T* input) {
 		input->firstInputCpu[i] = i;
 		input->secondInputCpu[i] = rand() % RANDOM_RANGE;
 	}
-
-		cudaMemcpy(input->firstInputGpu, input->firstInputCpu, inputParams->dataSizeBytes, cudaMemcpyHostToDevice);
-		cudaMemcpy(input->secondInputGpu, input->secondInputCpu, inputParams->dataSizeBytes, cudaMemcpyHostToDevice);
-
 }
 
-void perform_operations(INPUT_PARAMS_T * inputParams, INPUT_ARRAYS_T* input, OUTPUT_ARRAYS_T* output) {
+__host__ cudaEvent_t get_time(void)
+{
+	cudaEvent_t time;
+	cudaEventCreate(&time);
+	cudaEventRecord(time);
+	return time;
+}
+
+float perform_operations(INPUT_PARAMS_T * inputParams, INPUT_ARRAYS_T* input, OUTPUT_ARRAYS_T* output) {
+	cudaEvent_t start_time = get_time();
+
+
+	cudaMemcpy(input->firstInputGpu, input->firstInputCpu, inputParams->dataSizeBytes, cudaMemcpyHostToDevice);
+	cudaMemcpy(input->secondInputGpu, input->secondInputCpu, inputParams->dataSizeBytes, cudaMemcpyHostToDevice);
+
+
 	add<<<inputParams->numBlocks, inputParams->blockSize>>>(output->operationResultGpu, input->firstInputGpu, input->secondInputGpu);
 
 	cudaMemcpy(output->addResultCpu, output->operationResultGpu, inputParams->dataSizeBytes, cudaMemcpyDeviceToHost);
@@ -130,6 +141,14 @@ void perform_operations(INPUT_PARAMS_T * inputParams, INPUT_ARRAYS_T* input, OUT
 	{
 		printf("%d %% %d = %d\n", input->firstInputCpu[i], input->secondInputCpu[i], output->modResultCpu[i]);
 	}
+
+		cudaEvent_t end_time = get_time();
+	cudaEventSynchronize(end_time);
+
+	float delta = 0;
+	cudaEventElapsedTime(&delta, start_time, end_time);
+	return delta;
+
 }
 
 int main(int argc, char **argv)
@@ -145,7 +164,7 @@ int main(int argc, char **argv)
 	}
 	else
 	{
-		printf("Using default total threads %d", totalThreads);
+		printf("Using default total threads %d\n", totalThreads);
 	}
 	if (argc >= 3)
 	{
@@ -153,7 +172,7 @@ int main(int argc, char **argv)
 	}
 	else
 	{
-		printf("Using default block size %d", blockSize);
+		printf("Using default block size %d\n", blockSize);
 	}
 
 	unsigned int numBlocks = totalThreads / blockSize;
@@ -183,14 +202,18 @@ int main(int argc, char **argv)
 
 	allocate_paged_inputs(&inputParams, &input, &output);
 	initialize_inputs(&inputParams, &input);
-	perform_operations(&inputParams, &input, &output);
+	printf("Executing paged operations...");
+	float pagedDelta = perform_operations(&inputParams, &input, &output);
 	cleanup_paged_inputs(&input, &output);
 
 	allocate_pinned_inputs(&inputParams, &input, &output);
 	initialize_inputs(&inputParams, &input);
-	perform_operations(&inputParams, &input, &output);
+	printf("Executing pinned oeprations...");
+	float pinnedDelta = perform_operations(&inputParams, &input, &output);
 	cleanup_pinned_inputs(&input, &output);
 
+	printf("Paged operations too %f ms\n", pagedDelta);
+	printf("Pinned operations took %f ms\n", pinnedDelta);
 
 	return EXIT_SUCCESS;
 }
