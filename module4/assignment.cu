@@ -11,6 +11,9 @@
 
 // TODO if I had thought about this more I probably would have used a class instead of structs
 
+
+// these structs are a collection of the arrays used in order to properly 
+
 typedef struct
 {
 	unsigned int *firstInputCpu;
@@ -37,13 +40,15 @@ typedef struct
 	bool quiet;
 } INPUT_PARAMS_T;
 
-void allocate_paged_inputs(INPUT_PARAMS_T *inputParams, INPUT_ARRAYS_T *input, OUTPUT_ARRAYS_T *output)
+void allocate_paged(INPUT_PARAMS_T *inputParams, INPUT_ARRAYS_T *input, OUTPUT_ARRAYS_T *output)
 {
+	// inputs
 	input->firstInputCpu = new unsigned int[inputParams->totalThreads];
 	input->secondInputCpu = new unsigned int[inputParams->totalThreads];
 	cudaMalloc((void **)&(input->firstInputGpu), inputParams->dataSizeBytes);
 	cudaMalloc((void **)&(input->secondInputGpu), inputParams->dataSizeBytes);
 
+	// outputs
 	cudaMalloc((void **)&(output->operationResultGpu), inputParams->dataSizeBytes);
 	output->addResultCpu = new unsigned int[inputParams->totalThreads];
 	output->subtractResultCpu = new unsigned int[inputParams->totalThreads];
@@ -51,13 +56,15 @@ void allocate_paged_inputs(INPUT_PARAMS_T *inputParams, INPUT_ARRAYS_T *input, O
 	output->modResultCpu = new unsigned int[inputParams->totalThreads];
 }
 
-void cleanup_paged_inputs(INPUT_ARRAYS_T *input, OUTPUT_ARRAYS_T *output)
+void cleanup_paged(INPUT_ARRAYS_T *input, OUTPUT_ARRAYS_T *output)
 {
+	// inputs
 	delete[] input->firstInputCpu;
 	delete[] input->secondInputCpu;
 	cudaFree(input->firstInputGpu);
 	cudaFree(input->secondInputGpu);
 
+	// outputs
 	cudaFree(output->operationResultGpu);
 	delete[] output->addResultCpu;
 	delete[] output->subtractResultCpu;
@@ -65,13 +72,15 @@ void cleanup_paged_inputs(INPUT_ARRAYS_T *input, OUTPUT_ARRAYS_T *output)
 	delete[] output->modResultCpu;
 }
 
-void allocate_pinned_inputs(INPUT_PARAMS_T *inputParams, INPUT_ARRAYS_T *input, OUTPUT_ARRAYS_T *output)
+void allocate_pinned(INPUT_PARAMS_T *inputParams, INPUT_ARRAYS_T *input, OUTPUT_ARRAYS_T *output)
 {
+	// inputs
 	cudaMallocHost((void **)&(input->firstInputCpu), inputParams->dataSizeBytes);
 	cudaMallocHost((void **)&(input->secondInputCpu), inputParams->dataSizeBytes);
 	cudaMalloc((void **)&(input->firstInputGpu), inputParams->dataSizeBytes);
 	cudaMalloc((void **)&(input->secondInputGpu), inputParams->dataSizeBytes);
 
+	// outputs
 	cudaMalloc((void **)&(output->operationResultGpu), inputParams->dataSizeBytes);
 	cudaMallocHost((void **)&(output->addResultCpu), inputParams->dataSizeBytes);
 	cudaMallocHost((void **)&(output->subtractResultCpu), inputParams->dataSizeBytes);
@@ -79,13 +88,15 @@ void allocate_pinned_inputs(INPUT_PARAMS_T *inputParams, INPUT_ARRAYS_T *input, 
 	cudaMallocHost((void **)&(output->modResultCpu), inputParams->dataSizeBytes);
 }
 
-void cleanup_pinned_inputs(INPUT_ARRAYS_T *input, OUTPUT_ARRAYS_T *output)
+void cleanup_pinned(INPUT_ARRAYS_T *input, OUTPUT_ARRAYS_T *output)
 {
+	// inputs
 	cudaFreeHost(input->firstInputCpu);
 	cudaFreeHost(input->secondInputCpu);
 	cudaFree(input->firstInputGpu);
 	cudaFree(input->secondInputGpu);
 
+	// outputs
 	cudaFree(output->operationResultGpu);
 	cudaFreeHost(output->addResultCpu);
 	cudaFreeHost(output->subtractResultCpu);
@@ -95,6 +106,7 @@ void cleanup_pinned_inputs(INPUT_ARRAYS_T *input, OUTPUT_ARRAYS_T *output)
 
 void initialize_inputs(INPUT_PARAMS_T *inputParams, INPUT_ARRAYS_T *input)
 {
+	// populate the cpu inputs of the array, priming for the copy into device space
 	for (int i = 0; i < inputParams->totalThreads; i++)
 	{
 		input->firstInputCpu[i] = i;
@@ -114,6 +126,7 @@ float perform_operations(INPUT_PARAMS_T *inputParams, INPUT_ARRAYS_T *input, OUT
 {
 	cudaEvent_t start_time = get_time();
 
+	// start by copying data into the device space
 	cudaMemcpy(input->firstInputGpu, input->firstInputCpu, inputParams->dataSizeBytes, cudaMemcpyHostToDevice);
 	cudaMemcpy(input->secondInputGpu, input->secondInputCpu, inputParams->dataSizeBytes, cudaMemcpyHostToDevice);
 
@@ -189,6 +202,7 @@ int main(int argc, char **argv)
 	{
 		printf("Using default block size %d\n", blockSize);
 	}
+	// "quiet" flag. If provided, only the timings will be printed to terminal
 	bool quiet = argc >= 4 && strncmp(argv[3], "--quiet", 7) == 0;
 
 	unsigned int numBlocks = totalThreads / blockSize;
@@ -217,17 +231,17 @@ int main(int argc, char **argv)
 
 	OUTPUT_ARRAYS_T output;
 
-	allocate_paged_inputs(&inputParams, &input, &output);
+	allocate_paged(&inputParams, &input, &output);
 	initialize_inputs(&inputParams, &input);
-	printf("Executing paged operations...");
+	printf("Executing paged operations...\n");
 	float pagedDelta = perform_operations(&inputParams, &input, &output);
-	cleanup_paged_inputs(&input, &output);
+	cleanup_paged(&input, &output);
 
-	allocate_pinned_inputs(&inputParams, &input, &output);
+	allocate_pinned(&inputParams, &input, &output);
 	initialize_inputs(&inputParams, &input);
-	printf("Executing pinned oeprations...");
+	printf("Executing pinned oeprations...\n");
 	float pinnedDelta = perform_operations(&inputParams, &input, &output);
-	cleanup_pinned_inputs(&input, &output);
+	cleanup_pinned(&input, &output);
 
 	printf("Paged operations too %f ms\n", pagedDelta);
 	printf("Pinned operations took %f ms\n", pinnedDelta);
