@@ -34,6 +34,7 @@ typedef struct
 	unsigned int blockSize;
 	unsigned int numBlocks;
 	size_t dataSizeBytes;
+	bool quiet;
 } INPUT_PARAMS_T;
 
 void allocate_paged_inputs(INPUT_PARAMS_T *inputParams, INPUT_ARRAYS_T *input, OUTPUT_ARRAYS_T *output)
@@ -120,33 +121,41 @@ float perform_operations(INPUT_PARAMS_T *inputParams, INPUT_ARRAYS_T *input, OUT
 
 	cudaMemcpy(output->addResultCpu, output->operationResultGpu, inputParams->dataSizeBytes, cudaMemcpyDeviceToHost);
 
-	for (unsigned int i = 0; i < inputParams->totalThreads; i++)
-	{
-		printf("%d + %d = %d\n", input->firstInputCpu[i], input->secondInputCpu[i], output->addResultCpu[i]);
+	if (!inputParams->quiet) {
+		for (unsigned int i = 0; i < inputParams->totalThreads; i++)
+		{
+			printf("%d + %d = %d\n", input->firstInputCpu[i], input->secondInputCpu[i], output->addResultCpu[i]);
+		}
 	}
 
 	subtract<<<inputParams->numBlocks, inputParams->blockSize>>>(output->operationResultGpu, input->firstInputGpu, input->secondInputGpu);
 	cudaMemcpy(output->subtractResultCpu, output->operationResultGpu, inputParams->dataSizeBytes, cudaMemcpyDeviceToHost);
 
-	for (unsigned int i = 0; i < inputParams->totalThreads; i++)
-	{
-		printf("%d - %d = %d\n", input->firstInputCpu[i], input->secondInputCpu[i], output->subtractResultCpu[i]);
+	if (!inputParams->quiet) {
+		for (unsigned int i = 0; i < inputParams->totalThreads; i++)
+		{
+			printf("%d + %d = %d\n", input->firstInputCpu[i], input->secondInputCpu[i], output->addResultCpu[i]);
+		}
 	}
 
 	mult<<<inputParams->numBlocks, inputParams->blockSize>>>(output->operationResultGpu, input->firstInputGpu, input->secondInputGpu);
 	cudaMemcpy(output->multResultCpu, output->operationResultGpu, inputParams->dataSizeBytes, cudaMemcpyDeviceToHost);
 
-	for (unsigned int i = 0; i < inputParams->totalThreads; i++)
-	{
-		printf("%d * %d = %d\n", input->firstInputCpu[i], input->secondInputCpu[i], output->multResultCpu[i]);
+	if (!inputParams->quiet) {
+		for (unsigned int i = 0; i < inputParams->totalThreads; i++)
+		{
+			printf("%d + %d = %d\n", input->firstInputCpu[i], input->secondInputCpu[i], output->addResultCpu[i]);
+		}
 	}
 
 	mod<<<inputParams->numBlocks, inputParams->blockSize>>>(output->operationResultGpu, input->firstInputGpu, input->secondInputGpu);
 	cudaMemcpy(output->modResultCpu, output->operationResultGpu, inputParams->dataSizeBytes, cudaMemcpyDeviceToHost);
 
-	for (unsigned int i = 0; i < inputParams->totalThreads; i++)
-	{
-		printf("%d %% %d = %d\n", input->firstInputCpu[i], input->secondInputCpu[i], output->modResultCpu[i]);
+	if (!inputParams->quiet) {
+		for (unsigned int i = 0; i < inputParams->totalThreads; i++)
+		{
+			printf("%d + %d = %d\n", input->firstInputCpu[i], input->secondInputCpu[i], output->addResultCpu[i]);
+		}
 	}
 
 	cudaEvent_t end_time = get_time();
@@ -180,6 +189,7 @@ int main(int argc, char **argv)
 	{
 		printf("Using default block size %d\n", blockSize);
 	}
+	bool quiet = argc >= 4 && strncmp(argv[3], "--quiet", 7) == 0;
 
 	unsigned int numBlocks = totalThreads / blockSize;
 
@@ -200,6 +210,7 @@ int main(int argc, char **argv)
 		blockSize,
 		numBlocks,
 		dataSizeBytes,
+		quiet,
 	};
 
 	INPUT_ARRAYS_T input;
