@@ -3,66 +3,133 @@
 // NOTE formatting is based on the default formatter configuration of VS code
 
 #include <stdio.h>
+#include <stdlib.h>
 
-#include <curand.h>
-#include <curand_kernel.h>
+#include "operations.cuh"
 
 #define RANDOM_RANGE 4
 
-// TODO we want cudaHostMalloc to malloc pinned memory
+// TODO if I had thought about this more I probably would have used a class instead of structs
 
-// TODO:
-// pagable host -> device global
-// pinnable host -> device global
+typedef struct {
+	unsigned int * firstInputCpu;
+	unsigned int * secondInputCpu;
+	unsigned int * firstInputGpu;
+	unsigned int * secondInputGpu;
+} INPUT_ARRAYS_T;
 
-__device__ unsigned int get_thread_index()
-{
-	return (blockIdx.x * blockDim.x) + threadIdx.x;
+typedef struct {
+	unsigned int *operationResultGpu;
+	unsigned int *addResultCpu;
+	unsigned int *subtractResultCpu;
+	unsigned int *multResultCpu;
+	unsigned int *modResultCpu;
+} OUTPUT_ARRAYS_T;
+
+typedef struct {
+	unsigned int totalThreads;
+	unsigned int blockSize;
+	unsigned int numBlocks;
+	size_t dataSizeBytes;
+} INPUT_PARAMS_T;
+
+void allocate_paged_inputs(INPUT_PARAMS_T* inputParams, INPUT_ARRAYS_T* input, OUTPUT_ARRAYS_T * output) {
+		input->firstInputCpu = new unsigned int[inputParams->totalThreads];
+		input->secondInputCpu = new unsigned int[inputParams->totalThreads]; 
+		cudaMalloc((void **)&(input->firstInputGpu), inputParams->dataSizeBytes);
+		cudaMalloc((void **)&(input->secondInputGpu), inputParams->dataSizeBytes);
+
+		cudaMalloc((void**)&(output->operationResultGpu), inputParams->dataSizeBytes);
+		output->addResultCpu = new unsigned int[inputParams->totalThreads];
+		output->subtractResultCpu = new unsigned int[inputParams->totalThreads];
+		output->multResultCpu = new unsigned int[inputParams->totalThreads];
+		output->modResultCpu = new unsigned int[inputParams->totalThreads];
+
 }
 
-// this kernel is responsible for initializing the values of the first operational array
-// specifically, the value at a given index is the index itself
-__global__ void populate_first_array(unsigned int *block)
-{
+void cleanup_paged_inputs(INPUT_ARRAYS_T* input, OUTPUT_ARRAYS_T* output) {
+	delete[] input->firstInputCpu;
+	delete[] input->secondInputCpu;
+	cudaFree(input->firstInputGpu);
+	cudaFree(input->secondInputGpu);
 
-	// FIXME we need to adjust this to properly handle multiple blocks...
-	// I need to remember how to do that
-	const unsigned int thread_idx = get_thread_index();
-	block[thread_idx] = thread_idx;
+	cudaFree(output->operationResultGpu);
+	delete[] output->addResultCpu;
+	delete[] output->subtractResultCpu;
+	delete[] output->multResultCpu;
+	delete[] output->modResultCpu;
 }
 
-// this kernel "normalizes" the random generated data
-// "normalize" here means ensuring the bounds are within the defined range
-__global__ void normalize_second_array(unsigned int *block)
-{
-	const unsigned int thread_idx = get_thread_index();
-	block[thread_idx] = block[thread_idx] % RANDOM_RANGE;
+void allocate_pinned_inputs(INPUT_PARAMS_T* inputParams, INPUT_ARRAYS_T* input, OUTPUT_ARRAYS_T* output) {
+		cudaMallocHost((void **)&(input->firstInputCpu), inputParams->dataSizeBytes);
+		cudaMallocHost((void **)&(input->secondInputCpu), inputParams->dataSizeBytes);
+		cudaMalloc((void **)&(input->firstInputGpu), inputParams->dataSizeBytes);
+		cudaMalloc((void **)&(input->secondInputGpu), inputParams->dataSizeBytes);
+
+		cudaMalloc((void**)&(output->operationResultGpu), inputParams->dataSizeBytes);
+		cudaMallocHost((void **)&(output->addResultCpu), inputParams->dataSizeBytes);
+		cudaMallocHost((void **)&(output->subtractResultCpu), inputParams->dataSizeBytes);
+		cudaMallocHost((void **)&(output->multResultCpu), inputParams->dataSizeBytes);
+		cudaMallocHost((void **)&(output->modResultCpu), inputParams->dataSizeBytes);
 }
 
-__global__ void add(unsigned int *res, unsigned int *first, unsigned int *second)
-{
-	const unsigned int thread_idx = get_thread_index();
-	res[thread_idx] = first[thread_idx] + second[thread_idx];
+void cleanup_pinned_inputs(INPUT_ARRAYS_T* input, OUTPUT_ARRAYS_T* output) {
+	cudaFreeHost(input->firstInputCpu);
+	cudaFreeHost(input->secondInputCpu);
+	cudaFree(input->firstInputGpu);
+	cudaFree(input->secondInputGpu);
+
+	cudaFree(output->operationResultGpu);
+	cudaFreeHost(output->addResultCpu);
+	cudaFreeHost(output->subtractResultCpu);
+	cudaFreeHost(output->multResultCpu);
+	cudaFreeHost(output->modResultCpu);
 }
 
-__global__ void subtract(unsigned int *res, unsigned int *first, unsigned int *second)
-{
-	// it would be great if we could create a device function that took a lambda to perform the operation
-	const unsigned int thread_idx = get_thread_index();
-	// NOTE it is possible that we will end up with some underflows here, especially in the first few indices
-	res[thread_idx] = first[thread_idx] - second[thread_idx];
+void initialize_inputs(INPUT_PARAMS_T* inputParams, INPUT_ARRAYS_T* input) {
+		for (int i = 0; i < inputParams->totalThreads; i++) {
+		input->firstInputCpu[i] = i;
+		input->secondInputCpu[i] = rand() % RANDOM_RANGE;
+	}
+
+		cudaMemcpy(input->firstInputGpu, input->firstInputCpu, inputParams->dataSizeBytes, cudaMemcpyHostToDevice);
+		cudaMemcpy(input->secondInputGpu, input->secondInputCpu, inputParams->dataSizeBytes, cudaMemcpyHostToDevice);
+
 }
 
-__global__ void mult(unsigned int *res, unsigned int *first, unsigned int *second)
-{
-	const unsigned int thread_idx = get_thread_index();
-	res[thread_idx] = first[thread_idx] * second[thread_idx];
-}
+void perform_operations(INPUT_PARAMS_T * inputParams, INPUT_ARRAYS_T* input, OUTPUT_ARRAYS_T* output) {
+	add<<<inputParams->numBlocks, inputParams->blockSize>>>(output->operationResultGpu, input->firstInputGpu, input->secondInputGpu);
 
-__global__ void mod(unsigned int *res, unsigned int *first, unsigned int *second)
-{
-	const unsigned int thread_idx = get_thread_index();
-	res[thread_idx] = first[thread_idx] % second[thread_idx];
+	cudaMemcpy(output->addResultCpu, output->operationResultGpu, inputParams->dataSizeBytes, cudaMemcpyDeviceToHost);
+
+	for (unsigned int i = 0; i < inputParams->totalThreads; i++)
+	{
+		printf("%d + %d = %d\n", input->firstInputCpu[i], input->secondInputCpu[i], output->addResultCpu[i]);
+	}
+
+	subtract<<<inputParams->numBlocks, inputParams->blockSize>>>(output->operationResultGpu, input->firstInputGpu, input->secondInputGpu);
+	cudaMemcpy(output->subtractResultCpu, output->operationResultGpu, inputParams->dataSizeBytes, cudaMemcpyDeviceToHost);
+
+	for (unsigned int i = 0; i < inputParams->totalThreads; i++)
+	{
+		printf("%d - %d = %d\n", input->firstInputCpu[i], input->secondInputCpu[i], output->subtractResultCpu[i]);
+	}
+
+	mult<<<inputParams->numBlocks, inputParams->blockSize>>>(output->operationResultGpu, input->firstInputGpu, input->secondInputGpu);
+	cudaMemcpy(output->multResultCpu, output->operationResultGpu, inputParams->dataSizeBytes, cudaMemcpyDeviceToHost);
+
+	for (unsigned int i = 0; i < inputParams->totalThreads; i++)
+	{
+		printf("%d * %d = %d\n", input->firstInputCpu[i], input->secondInputCpu[i], output->multResultCpu[i]);
+	}
+
+	mod<<<inputParams->numBlocks, inputParams->blockSize>>>(output->operationResultGpu, input->firstInputGpu, input->secondInputGpu);
+	cudaMemcpy(output->modResultCpu, output->operationResultGpu, inputParams->dataSizeBytes, cudaMemcpyDeviceToHost);
+
+	for (unsigned int i = 0; i < inputParams->totalThreads; i++)
+	{
+		printf("%d %% %d = %d\n", input->firstInputCpu[i], input->secondInputCpu[i], output->modResultCpu[i]);
+	}
 }
 
 int main(int argc, char **argv)
@@ -89,7 +156,7 @@ int main(int argc, char **argv)
 		printf("Using default block size %d", blockSize);
 	}
 
-	int numBlocks = totalThreads / blockSize;
+	unsigned int numBlocks = totalThreads / blockSize;
 
 	// validate command line arguments
 	if (totalThreads % blockSize != 0)
@@ -103,87 +170,27 @@ int main(int argc, char **argv)
 
 	size_t dataSizeBytes = sizeof(unsigned int) * totalThreads;
 
-	// TODO we need to create 3 arrays... one that contains numeric values in the array, and 1 with random values 0-3, and 1 for the results!
-	unsigned int *firstInputCpu = new unsigned int[totalThreads];
-	unsigned int *secondInputCpu = new unsigned int[totalThreads];
-	unsigned int *addResultCpu = new unsigned int[totalThreads];
-	unsigned int *subtractResultCpu = new unsigned int[totalThreads];
-	unsigned int *multResultCpu = new unsigned int[totalThreads];
-	unsigned int *modResultCpu = new unsigned int[totalThreads];
+	INPUT_PARAMS_T inputParams = {
+	totalThreads,
+	blockSize,
+	numBlocks,
+	dataSizeBytes,
+	};
 
-	unsigned int *firstInputGpu;
-	unsigned int *secondInputGpu;
-	unsigned int *operationResultGpu;
+	INPUT_ARRAYS_T input;
 
-	// allocate cuda arrays
-	cudaMalloc((void **)&firstInputGpu, dataSizeBytes);
-	cudaMalloc((void **)&secondInputGpu, dataSizeBytes);
-	cudaMalloc((void **)&operationResultGpu, dataSizeBytes);
+	OUTPUT_ARRAYS_T output;
 
-	populate_first_array<<<numBlocks, blockSize>>>(firstInputGpu);
+	allocate_paged_inputs(&inputParams, &input, &output);
+	initialize_inputs(&inputParams, &input);
+	perform_operations(&inputParams, &input, &output);
+	cleanup_paged_inputs(&input, &output);
 
-	curandGenerator_t rng;
-	curandCreateGenerator(&rng, CURAND_RNG_PSEUDO_DEFAULT);
+	allocate_pinned_inputs(&inputParams, &input, &output);
+	initialize_inputs(&inputParams, &input);
+	perform_operations(&inputParams, &input, &output);
+	cleanup_pinned_inputs(&input, &output);
 
-	// TODO the seed of rng is the same run-to-run
-	// if we wanted it to be different, we should use the system time
-
-	// while this code is invoked from the host, it actually is run on device
-	curandGenerate(rng, secondInputGpu, totalThreads);
-	// take the random numbers and transform them so that they are mod 3
-	// while we could combine the generation and this into a single kernel, it seemed like a bit more configuration that I didn't want to deal with
-
-	// clean up rng since we're done with it
-	curandDestroyGenerator(rng);
-
-	normalize_second_array<<<numBlocks, blockSize>>>(secondInputGpu);
-
-	// copy inputs back to cpu for printing
-	cudaMemcpy(firstInputCpu, firstInputGpu, dataSizeBytes, cudaMemcpyDeviceToHost);
-	cudaMemcpy(secondInputCpu, secondInputGpu, dataSizeBytes, cudaMemcpyDeviceToHost);
-
-	add<<<numBlocks, blockSize>>>(operationResultGpu, firstInputGpu, secondInputGpu);
-	cudaMemcpy(addResultCpu, operationResultGpu, dataSizeBytes, cudaMemcpyDeviceToHost);
-
-	for (unsigned int i = 0; i < totalThreads; i++)
-	{
-		printf("%d + %d = %d\n", firstInputCpu[i], secondInputCpu[i], addResultCpu[i]);
-	}
-
-	subtract<<<numBlocks, blockSize>>>(operationResultGpu, firstInputGpu, secondInputGpu);
-	cudaMemcpy(subtractResultCpu, operationResultGpu, dataSizeBytes, cudaMemcpyDeviceToHost);
-
-	for (unsigned int i = 0; i < totalThreads; i++)
-	{
-		printf("%d - %d = %d\n", firstInputCpu[i], secondInputCpu[i], subtractResultCpu[i]);
-	}
-
-	mult<<<numBlocks, blockSize>>>(operationResultGpu, firstInputGpu, secondInputGpu);
-	cudaMemcpy(multResultCpu, operationResultGpu, dataSizeBytes, cudaMemcpyDeviceToHost);
-
-	for (unsigned int i = 0; i < totalThreads; i++)
-	{
-		printf("%d * %d = %d\n", firstInputCpu[i], secondInputCpu[i], multResultCpu[i]);
-	}
-
-	mod<<<numBlocks, blockSize>>>(operationResultGpu, firstInputGpu, secondInputGpu);
-	cudaMemcpy(modResultCpu, operationResultGpu, dataSizeBytes, cudaMemcpyDeviceToHost);
-
-	for (unsigned int i = 0; i < totalThreads; i++)
-	{
-		printf("%d %% %d = %d\n", firstInputCpu[i], secondInputCpu[i], modResultCpu[i]);
-	}
-
-	cudaFree(firstInputGpu);
-	cudaFree(secondInputGpu);
-	cudaFree(operationResultGpu);
-
-	delete[] firstInputCpu;
-	delete[] secondInputCpu;
-	delete[] addResultCpu;
-	delete[] subtractResultCpu;
-	delete[] multResultCpu;
-	delete[] modResultCpu;
 
 	return EXIT_SUCCESS;
 }
