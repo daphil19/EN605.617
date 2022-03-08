@@ -8,7 +8,7 @@
 	// "image": "nvidia/cuda:8.0-devel-ubuntu16.04",
 
 	"runArgs": [
-		// "--userns=keep-id", // uncommenting this breaks tings
+		"--userns=keep-id", // uncommenting this breaks tings... sortof
 		"--security-opt", "label=disable", "--hooks-dir=/usr/share/containers/oci/hooks.d", // this enables gpus in the container
 	],
 
@@ -38,6 +38,9 @@
 	// 	"git-lfs": "latest",
  
 	// these things seem to be encouraged (or required?) to get podman to go, except that things fail with podman?
+
+	"remoteUser": "vscode",
+	"containerUser": "vscode"
 
 	// "containerUser": "vscode",
 	// "containerEnv": {
