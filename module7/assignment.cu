@@ -1,6 +1,8 @@
 #include<stdio.h>
 #include "operations.cuh"
 
+static const int RANDOM_RANGE = 4;
+
 typedef struct {
     unsigned int *firstInput;
     unsigned int *secondInput;
@@ -16,12 +18,33 @@ __host__ cudaEvent_t get_time(void)
 }
 
 __host__ void print_delta(cudaEvent_t start, cudaEvent_t stop) {
-    // TODO
     cudaEventSynchronize(stop);
 
 	float delta = 0;
 	cudaEventElapsedTime(&delta, start, stop);
     printf("%f\n", delta);
+}
+
+__host__ OPERATION_ARRAYS_T initialize_operation_arrays(size_t dataSizeBytes) {
+    OPERATION_ARRAYS_T ops;
+    cudaMalloc((void**)&ops.firstInput, dataSizeBytes);
+    cudaMalloc((void**)&ops.secondInput, dataSizeBytes);
+    cudaMalloc((void**)&ops.output, dataSizeBytes);
+
+    return ops;
+}
+
+__host__ void free_operation_arrays(OPERATION_ARRAYS_T ops) {
+    cudaFree(ops.firstInput);
+    cudaFree(ops.secondInput);
+    cudaFree(ops.output);
+}
+
+
+__host__ void printResults(OPERATION_ARRAYS_T op, int size, char operation) {
+    for (int i = 0; i < size; i++) {
+        printf("%d %c %d = %d\n", op.firstInput[i], operation, op.secondInput[i], op.output[i]);
+    }
 }
 
 int main(int argc, char **argv)
@@ -46,6 +69,9 @@ int main(int argc, char **argv)
 	{
 		printf("Using default block size %d\n", blockSize);
 	}
+    // "quiet" flag. If provided, only the timings will be printed to terminal
+	bool quiet = argc >= 4 && strncmp(argv[3], "--quiet", 7) == 0;
+
 
 	unsigned int numBlocks = totalThreads / blockSize;
 
@@ -68,37 +94,19 @@ int main(int argc, char **argv)
     cudaStreamCreate(&streamMul);
     cudaStreamCreate(&streamMod);
 
-    // initialize timing events
-    // cudaEvent_t startStream, stopStream, startPage, stopPage;
-
-
     // define and allocate arryas
     // TODO putting all of this into an array may make the most sense...
-    unsigned int *firstInputCpu, *secondInputCpu;
-    unsigned int *firstInputGpuAdd, *secondInputGpuAdd, *outputGpuAdd;
-    unsigned int *firstInputGpuSub, *secondInputGpuSub, *outputGpuSub;
-    unsigned int *firstInputGpuMul, *secondInputGpuMul, *outputGpuMul;
-    unsigned int *firstInputGpuMod, *secondInputGpuMod, *outputGpuMod;
+    unsigned int *firstInputCpu, *secondInputCpu, *outputCpu;
     unsigned int *firstInputGpu, *secondInputGpu, *outputGpu; // non-streamed processing
 
     cudaHostAlloc(&firstInputCpu, dataSizeBytes, cudaHostAllocDefault);
     cudaHostAlloc(&secondInputCpu, dataSizeBytes, cudaHostAllocDefault);
+    cudaHostAlloc(&outputCpu, dataSizeBytes, cudaHostAllocDefault);
 
-    cudaMalloc((void**)&firstInputGpuAdd, dataSizeBytes);
-    cudaMalloc((void**)&secondInputGpuAdd, dataSizeBytes);
-    cudaMalloc((void**)&outputGpuAdd, dataSizeBytes);
-
-    cudaMalloc((void**)&firstInputGpuSub, dataSizeBytes);
-    cudaMalloc((void**)&secondInputGpuSub, dataSizeBytes);
-    cudaMalloc((void**)&outputGpuSub, dataSizeBytes);
-
-    cudaMalloc((void**)&firstInputGpuMul, dataSizeBytes);
-    cudaMalloc((void**)&secondInputGpuMul, dataSizeBytes);
-    cudaMalloc((void**)&outputGpuMul, dataSizeBytes);
-
-    cudaMalloc((void**)&firstInputGpuMod, dataSizeBytes);
-    cudaMalloc((void**)&secondInputGpuMod, dataSizeBytes);
-    cudaMalloc((void**)&outputGpuMod, dataSizeBytes);
+    OPERATION_ARRAYS_T addOps = initialize_operation_arrays(dataSizeBytes);
+    OPERATION_ARRAYS_T subOps = initialize_operation_arrays(dataSizeBytes);
+    OPERATION_ARRAYS_T mulOps = initialize_operation_arrays(dataSizeBytes);
+    OPERATION_ARRAYS_T modOps = initialize_operation_arrays(dataSizeBytes);
 
     cudaMalloc((void**)&firstInputGpu, dataSizeBytes);
     cudaMalloc((void**)&secondInputGpu, dataSizeBytes);
@@ -108,7 +116,7 @@ int main(int argc, char **argv)
     // initialize array inputs
     for (int i = 0; i < totalThreads; i++) {
         firstInputCpu[i] = i;
-        secondInputCpu[i] = rand();
+        secondInputCpu[i] = rand() % RANDOM_RANGE;
     }
 
     // cudaEventCreate(&start)
@@ -116,40 +124,63 @@ int main(int argc, char **argv)
 
     // copy data onto gpu
     // TODO apparantly we async copy to the stream and then call the kernel
-    cudaMemcpyAsync(firstInputGpuAdd, firstInputCpu, dataSizeBytes, cudaMemcpyHostToDevice, streamAdd);
-    cudaMemcpyAsync(secondInputGpuAdd, secondInputCpu, dataSizeBytes, cudaMemcpyHostToDevice, streamAdd);
+    cudaMemcpyAsync(addOps.firstInput, firstInputCpu, dataSizeBytes, cudaMemcpyHostToDevice, streamAdd);
+    cudaMemcpyAsync(addOps.secondInput, secondInputCpu, dataSizeBytes, cudaMemcpyHostToDevice, streamAdd);
 
-    cudaMemcpyAsync(firstInputGpuSub, firstInputCpu, dataSizeBytes, cudaMemcpyHostToDevice, streamSub);
-    cudaMemcpyAsync(secondInputGpuSub, secondInputCpu, dataSizeBytes, cudaMemcpyHostToDevice, streamSub);
+    cudaMemcpyAsync(subOps.firstInput, firstInputCpu, dataSizeBytes, cudaMemcpyHostToDevice, streamSub);
+    cudaMemcpyAsync(subOps.secondInput, secondInputCpu, dataSizeBytes, cudaMemcpyHostToDevice, streamSub);
 
-    cudaMemcpyAsync(firstInputGpuMul, firstInputCpu, dataSizeBytes, cudaMemcpyHostToDevice, streamMul);
-    cudaMemcpyAsync(secondInputGpuMul, secondInputCpu, dataSizeBytes, cudaMemcpyHostToDevice, streamMul);
+    cudaMemcpyAsync(mulOps.firstInput, firstInputCpu, dataSizeBytes, cudaMemcpyHostToDevice, streamMul);
+    cudaMemcpyAsync(mulOps.secondInput, secondInputCpu, dataSizeBytes, cudaMemcpyHostToDevice, streamMul);
 
-    cudaMemcpyAsync(firstInputGpuMod, firstInputCpu, dataSizeBytes, cudaMemcpyHostToDevice, streamMod);
-    cudaMemcpyAsync(secondInputGpuMod, secondInputCpu, dataSizeBytes, cudaMemcpyHostToDevice, streamMod);
+    cudaMemcpyAsync(modOps.firstInput, firstInputCpu, dataSizeBytes, cudaMemcpyHostToDevice, streamMod);
+    cudaMemcpyAsync(modOps.secondInput, secondInputCpu, dataSizeBytes, cudaMemcpyHostToDevice, streamMod);
 
 
     // block before we process, just to make sure the copy is done in time
     cudaStreamSynchronize(streamAdd);
-    add<<<numBlocks, blockSize, 0, streamAdd>>>(outputGpuAdd, firstInputGpuAdd, secondInputGpuAdd);
+    add<<<numBlocks, blockSize, 0, streamAdd>>>(addOps.output, addOps.firstInput, addOps.secondInput);
     cudaStreamSynchronize(streamAdd);
 
     cudaStreamSynchronize(streamSub);
-    subtract<<<numBlocks, blockSize, 0, streamAdd>>>(outputGpuAdd, firstInputGpuAdd, secondInputGpuAdd);
+    subtract<<<numBlocks, blockSize, 0, streamAdd>>>(subOps.output, subOps.firstInput, subOps.secondInput);
     cudaStreamSynchronize(streamSub);
 
     cudaStreamSynchronize(streamMul);
-    mult<<<numBlocks, blockSize, 0, streamAdd>>>(outputGpuAdd, firstInputGpuAdd, secondInputGpuAdd);
+    mult<<<numBlocks, blockSize, 0, streamAdd>>>(mulOps.output, mulOps.firstInput, mulOps.secondInput);
     cudaStreamSynchronize(streamMul);
 
     cudaStreamSynchronize(streamMod);
-    mod<<<numBlocks, blockSize, 0, streamAdd>>>(outputGpuAdd, firstInputGpuAdd, secondInputGpuAdd);
+    mod<<<numBlocks, blockSize, 0, streamAdd>>>(modOps.output, modOps.firstInput, modOps.secondInput);
     cudaStreamSynchronize(streamMod);
 
     cudaEvent_t streamStop = get_time();
-    print_delta(streamStart, streamStop);
 
-    // TODO output!
+    if (!quiet) {
+        OPERATION_ARRAYS_T host_outputs = {
+            firstInputCpu,
+            secondInputCpu,
+            outputCpu
+        };
+        cudaMemcpyAsync(host_outputs.output, addOps.output, dataSizeBytes, cudaMemcpyHostToDevice, streamAdd);
+        cudaStreamSynchronize(streamAdd);
+        printResults(host_outputs, totalThreads, '+');
+
+        cudaMemcpyAsync(host_outputs.output, subOps.output, dataSizeBytes, cudaMemcpyHostToDevice, streamSub);
+        cudaStreamSynchronize(streamSub);
+        printResults(host_outputs, totalThreads, '-');
+
+        cudaMemcpyAsync(host_outputs.output, mulOps.output, dataSizeBytes, cudaMemcpyHostToDevice, streamMul);
+        cudaStreamSynchronize(streamMul);
+        printResults(host_outputs, totalThreads, '*');
+
+        cudaMemcpyAsync(host_outputs.output, modOps.output, dataSizeBytes, cudaMemcpyHostToDevice, streamMod);
+        cudaStreamSynchronize(streamMod);
+        printResults(host_outputs, totalThreads, '%');
+    }
+
+    printf("stream runtime: ");
+    print_delta(streamStart, streamStop);
 
     cudaEvent_t syncStart = get_time();
 
@@ -167,28 +198,21 @@ int main(int argc, char **argv)
     cudaMemcpy(firstInputGpu, firstInputCpu, dataSizeBytes, cudaMemcpyHostToDevice);
     cudaMemcpy(secondInputGpu, secondInputCpu, dataSizeBytes, cudaMemcpyHostToDevice);
 
+    // we won't output the synchronous operations because we already know those work correctly
+
     cudaEvent_t syncStop = get_time();
+    printf("synchronous runtime: ");
     print_delta(syncStart, syncStop);
 
 
     cudaFreeHost(firstInputCpu);
     cudaFreeHost(secondInputCpu);
+    cudaFreeHost(outputCpu);
 
-    cudaFree(firstInputGpuAdd);
-    cudaFree(secondInputGpuAdd);
-    cudaFree(outputGpuAdd);
-
-    cudaFree(firstInputGpuSub);
-    cudaFree(secondInputGpuSub);
-    cudaFree(outputGpuSub);
-
-    cudaFree(firstInputGpuMul);
-    cudaFree(secondInputGpuMul);
-    cudaFree(outputGpuMul);
-
-    cudaFree(firstInputGpuMod);
-    cudaFree(secondInputGpuMod);
-    cudaFree(outputGpuMod);
+    free_operation_arrays(addOps);
+    free_operation_arrays(subOps);
+    free_operation_arrays(mulOps);
+    free_operation_arrays(modOps);
 
     cudaFree(firstInputGpu);
     cudaFree(secondInputGpu);
