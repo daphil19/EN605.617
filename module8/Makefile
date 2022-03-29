@@ -3,7 +3,7 @@ objects = assignment.o
 all: assignment.exe
 
 assignment.exe: $(objects)
-	nvcc $(objects) -lcudart -lcufft -lcublas -o assignment.exe
+	nvcc $(objects) -lcudart -lcufft -lcublas -lcurand -o assignment.exe
 
 %.o: %.cu
 	nvcc -dc $< -o $@
