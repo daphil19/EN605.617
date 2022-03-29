@@ -1,0 +1,49 @@
+Matrix Multiplication: (4x2) * (2x4)
+Matrix A:
+3 7 
+9 2 
+4.64037e-310 1.8231e-321 
+0 4.64037e-310 
+
+Matrix B:
+3 7 3 6 
+3 6 9 2 
+
+Matrix C:
+3 7 3 6 
+9 2 0 3 
+4.64037e-310 1.8231e-321 7.41098e-323 8.39912e-323 
+0 4.64037e-310 1.6976e-313 4.64037e-310 
+
+
+Perform FFT of size 16
+Input Singal
+1
+0
+-1
+0
+1
+0
+-1
+0
+1
+0
+-1
+0
+1
+0
+-1
+0
+
+FFT output (dropping redundant data)
+0 + 0j
+0 + 0j
+0 + 0j
+0 + 0j
+8 + 0j
+0 + 0j
+0 + 0j
+0 + 0j
+0 + 0j
+Matrix multiplcation: 290.337708
+FFT: 93.856865

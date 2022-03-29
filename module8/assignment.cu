@@ -162,15 +162,45 @@ void perform_fft(int fft_size)
     delete[] result;
 }
 
+__host__ cudaEvent_t get_time(void)
+{
+    cudaEvent_t time;
+    cudaEventCreate(&time);
+    cudaEventRecord(time);
+    return time;
+}
+
+// print the delta based on the provided start and stop events
+__host__ void print_delta(cudaEvent_t start, cudaEvent_t stop)
+{
+    cudaEventSynchronize(stop);
+
+    float delta = 0;
+    cudaEventElapsedTime(&delta, start, stop);
+    printf("%f\n", delta);
+}
+
 int main(int argc, char **argv)
 {
 
-    int M = 10;
-    int N = 10;
+    int M = 2;
+    int N = 2;
+
+    cudaEvent_t matrixStart = get_time();
     perform_matrix_multiplcation(M, N);
+    cudaEvent_t matrixStop = get_time();
 
     int fft_size = 4;
+
+    cudaEvent_t fftStart = get_time();
     perform_fft(fft_size);
+    cudaEvent_t fftStop = get_time();
+
+    std::cout << "Matrix multiplcation: ";
+    print_delta(matrixStart, matrixStop);
+
+    std::cout << "FFT: ";
+    print_delta(fftStart, fftStop);
 
     return EXIT_SUCCESS;
 }
