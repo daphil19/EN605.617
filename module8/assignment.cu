@@ -5,8 +5,6 @@
 #include <cublas.h>
 #include <cufft.h>
 
-
-
 #define index(r,c,l) (((r)*(l))+(c))
 
 static const int NO_OFFSET = 0;
@@ -38,19 +36,13 @@ __global__ void generate_cosine_wave(cufftDoubleReal* signal) {
         case 2: signal[thread_idx] = -1; break;
         case 3: signal[thread_idx] = 0; break;
     }
-    // signal[thread_idx] += 1;
 }
 
 int main(int argc, char **argv) {
 
-    // TODO arguments
-
-
     int N = 10, M = 10;
 
-//     // curandState_t* states;
-//     // cudaMalloc((void**) &states, M*N * sizeof(curandState_t));
-
+    std::cout << "Matrix Multiplication: (" << M << "x" << N << ") * (" << N << "x" << M << ")" << std::endl;
 
     double* cpu_A = new double[M*N];
     double* cpu_B = new double[N*M];
@@ -65,23 +57,6 @@ int main(int argc, char **argv) {
         cpu_C[i] = rand() % MAX;
     }
 
-
-
-
-	// curandGenerator_t rng;
-	// curandCreateGenerator(&rng, CURAND_RNG_PSEUDO_DEFAULT);
-
-	// // // while this code is invoked from the host, it actually is run on device
-	// curandGenerateUniformDouble(rng, cpu_A, M*N);
-	// // curandGenerateUniformDouble(rng, cpu_B, N*M);
-
-	// curandDestroyGenerator(rng);
-
-
-    // for (int i = 0; i < M*N; i++) {
-    //     std::cout << cpu_A[i] << std::endl;
-    // }
-
     double* gpu_A;
     double* gpu_B;
     double* gpu_C;
@@ -91,23 +66,51 @@ int main(int argc, char **argv) {
     cublasAlloc(N*M, sizeof(double), (void**)&gpu_B);
     cublasAlloc(M*M, sizeof(double), (void**)&gpu_C);
 
-
     cublasSetMatrix(M, N, sizeof(double), cpu_A, M, gpu_A, M);
     cublasSetMatrix(N, M, sizeof(double), cpu_B, N, gpu_B, N);
 
 
-// // FIXME the GPU guys need to 
     cublasDgemm('n', 'n', M, M, N, 1, gpu_A, M, gpu_B, N, 0, gpu_C, M);
 
     cublasGetMatrix(M, M, sizeof(double), gpu_C, M, cpu_C, M);
 
-
-//     // cudaFree(states);
     cublasFree(gpu_A);
     cublasFree(gpu_B);
     cublasFree(gpu_C);
     
     cublasShutdown();
+
+
+    // print output
+    std::cout << "Matrix A:" << std::endl;
+    for (int i = 0; i < M; i++) {
+        for (int j = 0; j < N; j++) {
+            std::cout << cpu_A[index(i, j, M)] << " ";
+        }
+        std::cout << std::endl;
+    }
+
+    // extra \n for better separation
+    std::cout << std::endl;
+
+    std::cout << "Matrix B:" << std::endl;
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < M; j++) {
+            std::cout << cpu_B[index(i, j, N)] << " ";
+        }
+        std::cout << std::endl;
+    }
+
+    // extra \n for better separation
+    std::cout << std::endl;
+
+    std::cout << "Matrix C (A x B);" << std::endl;
+    for (int i = 0; i < M; i++) {
+        for (int j = 0; j < M; j++) {
+            std::cout << cpu_C[index(i, j, M)] << " ";
+        }
+        std::cout << std::endl;
+    }
 
     delete[] cpu_A;
     delete[] cpu_B;
@@ -119,8 +122,13 @@ int main(int argc, char **argv) {
     cufftHandle plan;
 
     int fft_size = 4;
-    size_t real_data_size_bytes = fft_size * sizeof(cufftDoubleReal);
 
+    // extra \ns for better separation
+    std::cout << std::endl << std::endl;
+
+    std::cout << "Perform FFT of size " << fft_size << std::endl;
+
+    size_t real_data_size_bytes = fft_size * sizeof(cufftDoubleReal);
 
     // for real->complex fft, the result size is dataSize (read: fftSize) / 2 + 1
     int results_size = (fft_size / 2) + 1;
@@ -143,9 +151,21 @@ int main(int argc, char **argv) {
 
     double2 *result = new double2[results_size];
 
+    std::cout << "Input Singal" << std::endl;
+    double *signal_cpu = new double[fft_size];
+    cudaMemcpy(signal_cpu, signal, real_data_size_bytes, cudaMemcpyDeviceToHost);
+    for (int i = 0; i < fft_size; i++) {
+        std::cout << signal_cpu[i] << std::endl;
+    }  
+    delete[] signal_cpu;
+
+    // extra \n for better separation
+    std::cout << std::endl;
+
+    std::cout << "FFT output (dropping redundant data)" << std::endl;
     cudaMemcpy(result, freq_domain, complex_data_size_bytes, cudaMemcpyDeviceToHost);
     for (int i = 0; i < results_size; i++) {
-        std::cout << result[i].x << " " << result[i].y << std::endl;
+        std::cout << result[i].x << " + " << result[i].y << "j" << std::endl;
     }
 
     cufftDestroy(plan);
