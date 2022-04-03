@@ -1,10 +1,9 @@
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
+#include <thrust/sequence.h>
 #include <thrust/functional.h>
 
 #include <iostream>
-
-
 
 template<
 typename ThrustVectorType,
@@ -36,6 +35,8 @@ void perform_operations(ThrustVectorType *first, ThrustVectorType *second) {
 
 int main(int argc, char const *argv[])
 {
+
+    // TODO args!
 
     size_t vector_size = 10;
 
