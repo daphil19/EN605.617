@@ -49,9 +49,11 @@
 #include <string.h>
 #include <fstream>
 #include <iostream>
+#include <stdio.h>
 
 #include <cuda_runtime.h>
 #include <npp.h>
+#include <nvgraph.h>
 
 #include <helper_string.h>
 #include <helper_cuda.h>
@@ -94,6 +96,105 @@ bool printfNPPinfo(int argc, char *argv[])
     // Min spec is SM 1.0 devices
     bool bVal = checkCudaCapabilities(1, 0);
     return bVal;
+}
+
+void perform_nvgraph() {
+    printf("Performing nvgraph...");
+    const size_t  num_vertices = 6, num_edges = 10, vertex_numsets = 1, edge_numsets = 1;
+    int i, *destination_offsets, *source_indices;
+    float *weights;
+    void** vertex_dim;
+
+    nvgraphStatus_t status;
+    nvgraphHandle_t handle;
+    nvgraphGraphDescr_t graph;
+    nvgraphCSCTopology32I_t topology;
+    cudaDataType_t edge_dim_t = CUDA_R_32F;
+    cudaDataType_t *vertex_dim_t;
+
+    destination_offsets = new int[num_vertices+1];
+    source_indices = new int[num_edges];
+    weights = new float[num_edges];
+    vertex_dim = new void*[vertex_numsets];
+    vertex_dim_t = new cudaDataType_t[vertex_numsets];
+    topology = new nvgraphCSCTopology32I_st;
+
+    float *shortest_path_res = new float[num_vertices];
+
+
+    vertex_dim[0] = (void*)shortest_path_res;
+    vertex_dim_t[0] = CUDA_R_32F;
+    
+    weights [0] = 0.333333f;
+    weights [1] = 0.500000f;
+    weights [2] = 0.333333f;
+    weights [3] = 0.500000f;
+    weights [4] = 0.500000f;
+    weights [5] = 1.000000f;
+    weights [6] = 0.333333f;
+    weights [7] = 0.500000f;
+    weights [8] = 0.500000f;
+    weights [9] = 0.500000f;
+
+    destination_offsets [0] = 0;
+    destination_offsets [1] = 1;
+    destination_offsets [2] = 3;
+    destination_offsets [3] = 4;
+    destination_offsets [4] = 6;
+    destination_offsets [5] = 8;
+    destination_offsets [6] = 10;
+
+    source_indices [0] = 2;
+    source_indices [1] = 0;
+    source_indices [2] = 2;
+    source_indices [3] = 0;
+    source_indices [4] = 4;
+    source_indices [5] = 5;
+    source_indices [6] = 2;
+    source_indices [7] = 3;
+    source_indices [8] = 3;
+    source_indices [9] = 4;
+
+
+    nvgraphCreate (&handle);
+    nvgraphCreateGraphDescr (handle, &graph);
+
+    topology->nvertices = num_vertices;
+    topology->nedges = num_edges;
+    topology->destination_offsets = destination_offsets;
+    topology->source_indices = source_indices;
+
+    nvgraphSetGraphStructure(handle, graph, (void*)topology, NVGRAPH_CSC_32);
+    nvgraphAllocateVertexData(handle, graph, vertex_numsets, vertex_dim_t);
+    nvgraphAllocateEdgeData  (handle, graph, edge_numsets, &edge_dim_t);
+    nvgraphSetEdgeData(handle, graph, (void*)weights, 0);
+
+    int source_vertex = 0;
+
+    nvgraphSssp(handle, graph, 0, &source_vertex, 0);
+
+    // Get and print result
+    nvgraphGetVertexData(handle, graph, (void*)shortest_path_res, 0);
+    printf("Sssp result:\n"); for (i = 0; i<num_vertices; i++)  printf("%f\n",shortest_path_res[i]); printf("\n");
+
+    //Clean 
+    nvgraphDestroyGraphDescr(handle, graph);
+    nvgraphDestroy(handle);
+
+
+    delete[] destination_offsets;
+    delete[] source_indices;
+    delete[] weights;
+    delete[] vertex_dim;
+    delete[] vertex_dim_t;
+    delete topology;
+}
+
+void check(nvgraphStatus_t status) {
+    if (status != NVGRAPH_STATUS_SUCCESS) {
+        printf("ERROR : %d\n",status);
+        exit(0);
+    }
 }
 
 int main(int argc, char *argv[])
@@ -179,10 +280,10 @@ int main(int argc, char *argv[])
         npp::ImageNPP_8u_C1 oDeviceSrc(oHostSrc);
 
         // create struct with box-filter mask size
-        NppiSize oMaskSize = {5, 5};
+        // NppiSize oMaskSize = {5, 5};
 
         NppiSize oSrcSize = {(int)oDeviceSrc.width(), (int)oDeviceSrc.height()};
-        NppiPoint oSrcOffset = {0, 0};
+        // NppiPoint oSrcOffset = {0, 0};
 
 
         double imageScaling = 2;
@@ -196,7 +297,7 @@ int main(int argc, char *argv[])
         std::cout << "done" << std::endl;
         // set anchor point inside the mask to (oMaskSize.width / 2, oMaskSize.height / 2)
         // It should round down when odd
-        NppiPoint oAnchor = {oMaskSize.width / 2, oMaskSize.height / 2};
+        // NppiPoint oAnchor = {oMaskSize.width / 2, oMaskSize.height / 2};
 
         NppiSize dstROISize = {oDeviceDst.width(), oDeviceDst.height()};
 
@@ -272,7 +373,7 @@ int main(int argc, char *argv[])
         saveImage(sResultFilename, oHostDst);
         std::cout << "Saved image: " << sResultFilename << std::endl;
 
-        exit(EXIT_SUCCESS);
+        // exit(EXIT_SUCCESS);
     }
     catch (npp::Exception &rException)
     {
@@ -291,5 +392,7 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    return 0;
+    perform_nvgraph();
+
+    return EXIT_SUCCESS;
 }
