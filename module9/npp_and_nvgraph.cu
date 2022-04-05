@@ -3,7 +3,6 @@
 // boxFilterNPP examples found in this repo
 ///////////////////////////////////////////////////////////////////////////////
 
-
 #include <ImagesCPU.h>
 #include <ImagesNPP.h>
 #include <ImageIO.h>
@@ -63,7 +62,7 @@ inline int cudaDeviceInit(int argc, const char **argv)
 
 bool printfNPPinfo(int argc, char *argv[])
 {
-    const NppLibraryVersion *libVer   = nppGetLibVersion();
+    const NppLibraryVersion *libVer = nppGetLibVersion();
 
     printf("NPP Library Version %d.%d.%d\n", libVer->major, libVer->minor, libVer->build);
 
@@ -71,15 +70,16 @@ bool printfNPPinfo(int argc, char *argv[])
     cudaDriverGetVersion(&driverVersion);
     cudaRuntimeGetVersion(&runtimeVersion);
 
-    printf("  CUDA Driver  Version: %d.%d\n", driverVersion/1000, (driverVersion%100)/10);
-    printf("  CUDA Runtime Version: %d.%d\n", runtimeVersion/1000, (runtimeVersion%100)/10);
+    printf("  CUDA Driver  Version: %d.%d\n", driverVersion / 1000, (driverVersion % 100) / 10);
+    printf("  CUDA Runtime Version: %d.%d\n", runtimeVersion / 1000, (runtimeVersion % 100) / 10);
 
     // Min spec is SM 1.0 devices
     bool bVal = checkCudaCapabilities(1, 0);
     return bVal;
 }
 
-void perform_npp_operation(int argc, char* argv[]) {
+void perform_npp_operation(int argc, char *argv[])
+{
     try
     {
         std::string sFilename;
@@ -110,13 +110,15 @@ void perform_npp_operation(int argc, char* argv[]) {
             sFilename = "Lena.pgm";
         }
 
-
         double imageScaling;
- 
-        if (argc >= 2) {
+
+        if (argc >= 2)
+        {
             imageScaling = atof(argv[1]);
             std::cout << "Image will be scaled by a factor of " << imageScaling << " in both directions." << std::endl;
-        } else {
+        }
+        else
+        {
             imageScaling = 2;
             std::cout << "No image scaling argument provided. Image will be scaled by a default factor of " << imageScaling << std::endl;
         }
@@ -171,7 +173,6 @@ void perform_npp_operation(int argc, char* argv[]) {
 
         NppiSize oSrcSize = {(int)oDeviceSrc.width(), (int)oDeviceSrc.height()};
 
-
         NppiRect oSrcROI = {0, 0, oDeviceSrc.width(), oDeviceSrc.height()};
         // allocate device image of appropriately reduced size
         npp::ImageNPP_8u_C1 oDeviceDst(oDeviceSrc.width() * imageScaling, oDeviceSrc.height() * imageScaling);
@@ -179,20 +180,18 @@ void perform_npp_operation(int argc, char* argv[]) {
 
         NppiSize dstROISize = {oDeviceDst.width(), oDeviceDst.height()};
 
-        NPP_CHECK_NPP (
+        NPP_CHECK_NPP(
             nppiResize_8u_C1R(
-                oDeviceSrc.data(), 
-                oSrcSize, 
-                oDeviceSrc.pitch(), 
+                oDeviceSrc.data(),
+                oSrcSize,
+                oDeviceSrc.pitch(),
                 oSrcROI,
                 oDeviceDst.data(),
                 oDeviceDst.pitch(),
                 dstROISize,
                 imageScaling,
                 imageScaling,
-                NPPI_INTER_CUBIC
-            )
-        );
+                NPPI_INTER_CUBIC));
 
         // declare a host image for the result
         npp::ImageCPU_8u_C1 oHostDst(oDeviceDst.size());
@@ -219,12 +218,13 @@ void perform_npp_operation(int argc, char* argv[]) {
     }
 }
 
-void perform_nvgraph_operation() {
+void perform_nvgraph_operation()
+{
     printf("Performing nvgraph operation...\n");
-    const size_t  num_vertices = 6, num_edges = 10, vertex_numsets = 1, edge_numsets = 1;
+    const size_t num_vertices = 6, num_edges = 10, vertex_numsets = 1, edge_numsets = 1;
     int i, *destination_offsets, *source_indices;
     float *weights;
-    void** vertex_dim;
+    void **vertex_dim;
 
     nvgraphStatus_t status;
     nvgraphHandle_t handle;
@@ -233,72 +233,73 @@ void perform_nvgraph_operation() {
     cudaDataType_t edge_dim_t = CUDA_R_32F;
     cudaDataType_t *vertex_dim_t;
 
-    destination_offsets = new int[num_vertices+1];
+    destination_offsets = new int[num_vertices + 1];
     source_indices = new int[num_edges];
     weights = new float[num_edges];
-    vertex_dim = new void*[vertex_numsets];
+    vertex_dim = new void *[vertex_numsets];
     vertex_dim_t = new cudaDataType_t[vertex_numsets];
     topology = new nvgraphCSCTopology32I_st;
 
     float *shortest_path_res = new float[num_vertices];
 
-
-    vertex_dim[0] = (void*)shortest_path_res;
+    vertex_dim[0] = (void *)shortest_path_res;
     vertex_dim_t[0] = CUDA_R_32F;
-    
-    weights [0] = 0.333333f;
-    weights [1] = 0.500000f;
-    weights [2] = 0.333333f;
-    weights [3] = 0.500000f;
-    weights [4] = 0.500000f;
-    weights [5] = 1.000000f;
-    weights [6] = 0.333333f;
-    weights [7] = 0.500000f;
-    weights [8] = 0.500000f;
-    weights [9] = 0.500000f;
 
-    destination_offsets [0] = 0;
-    destination_offsets [1] = 1;
-    destination_offsets [2] = 3;
-    destination_offsets [3] = 4;
-    destination_offsets [4] = 6;
-    destination_offsets [5] = 8;
-    destination_offsets [6] = 10;
+    weights[0] = 0.333333f;
+    weights[1] = 0.500000f;
+    weights[2] = 0.333333f;
+    weights[3] = 0.500000f;
+    weights[4] = 0.500000f;
+    weights[5] = 1.000000f;
+    weights[6] = 0.333333f;
+    weights[7] = 0.500000f;
+    weights[8] = 0.500000f;
+    weights[9] = 0.500000f;
 
-    source_indices [0] = 2;
-    source_indices [1] = 0;
-    source_indices [2] = 2;
-    source_indices [3] = 0;
-    source_indices [4] = 4;
-    source_indices [5] = 5;
-    source_indices [6] = 2;
-    source_indices [7] = 3;
-    source_indices [8] = 3;
-    source_indices [9] = 4;
+    destination_offsets[0] = 0;
+    destination_offsets[1] = 1;
+    destination_offsets[2] = 3;
+    destination_offsets[3] = 4;
+    destination_offsets[4] = 6;
+    destination_offsets[5] = 8;
+    destination_offsets[6] = 10;
 
+    source_indices[0] = 2;
+    source_indices[1] = 0;
+    source_indices[2] = 2;
+    source_indices[3] = 0;
+    source_indices[4] = 4;
+    source_indices[5] = 5;
+    source_indices[6] = 2;
+    source_indices[7] = 3;
+    source_indices[8] = 3;
+    source_indices[9] = 4;
 
-    nvgraphCreate (&handle);
-    nvgraphCreateGraphDescr (handle, &graph);
+    nvgraphCreate(&handle);
+    nvgraphCreateGraphDescr(handle, &graph);
 
     topology->nvertices = num_vertices;
     topology->nedges = num_edges;
     topology->destination_offsets = destination_offsets;
     topology->source_indices = source_indices;
 
-    nvgraphSetGraphStructure(handle, graph, (void*)topology, NVGRAPH_CSC_32);
+    nvgraphSetGraphStructure(handle, graph, (void *)topology, NVGRAPH_CSC_32);
     nvgraphAllocateVertexData(handle, graph, vertex_numsets, vertex_dim_t);
-    nvgraphAllocateEdgeData  (handle, graph, edge_numsets, &edge_dim_t);
-    nvgraphSetEdgeData(handle, graph, (void*)weights, 0);
+    nvgraphAllocateEdgeData(handle, graph, edge_numsets, &edge_dim_t);
+    nvgraphSetEdgeData(handle, graph, (void *)weights, 0);
 
     int source_vertex = 0;
 
     nvgraphSssp(handle, graph, 0, &source_vertex, 0);
 
     // Get and print result
-    nvgraphGetVertexData(handle, graph, (void*)shortest_path_res, 0);
-    printf("Sssp result:\n"); for (i = 0; i<num_vertices; i++)  printf("%f\n",shortest_path_res[i]); printf("\n");
+    nvgraphGetVertexData(handle, graph, (void *)shortest_path_res, 0);
+    printf("Sssp result:\n");
+    for (i = 0; i < num_vertices; i++)
+        printf("%f\n", shortest_path_res[i]);
+    printf("\n");
 
-    //Clean 
+    // Clean
     nvgraphDestroyGraphDescr(handle, graph);
     nvgraphDestroy(handle);
 
@@ -314,7 +315,6 @@ int main(int argc, char *argv[])
 {
     printf("%s Starting...\n\n", argv[0]);
 
-
     cudaEvent_t nppStart = get_time();
     perform_npp_operation(argc, argv);
     cudaEvent_t nppStop = get_time();
@@ -323,13 +323,11 @@ int main(int argc, char *argv[])
     perform_nvgraph_operation();
     cudaEvent_t nvgraphStop = get_time();
 
-
     std::cout << "NPP Operation: ";
     print_delta(nppStart, nppStop);
 
     std::cout << "nvGRAPH Operation: ";
     print_delta(nvgraphStart, nvgraphStop);
-
 
     return EXIT_SUCCESS;
 }
