@@ -114,7 +114,7 @@ cl_command_queue CreateCommandQueue(cl_context context, cl_device_id *device)
     // In this example, we just choose the first available device.  In a
     // real program, you would likely use all available devices or choose
     // the highest performance device based on OpenCL device queries
-    commandQueue = clCreateCommandQueue(context, devices[0], 0, NULL);
+    commandQueue = clCreateCommandQueue(context, devices[0], CL_QUEUE_PROFILING_ENABLE, NULL);
     if (commandQueue == NULL)
     {
         delete [] devices;
@@ -265,10 +265,26 @@ void perform_kernel(cl_context& context, cl_command_queue& commandQueue, cl_prog
     size_t globalWorkSize[1] = { ARRAY_SIZE };
     size_t localWorkSize[1] = { 1 };
 
+    cl_event event;
+
     // Queue the kernel up for execution across the array
     errNum = clEnqueueNDRangeKernel(commandQueue, kernel, 1, NULL,
                                     globalWorkSize, localWorkSize,
-                                    0, NULL, NULL);
+                                    0, NULL, &event);
+
+    clWaitForEvents(1, &event);
+    clFinish(commandQueue);
+
+    cl_ulong time_start;
+    cl_ulong time_end;
+
+    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
+    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
+
+    double nanoSeconds = time_end-time_start;
+    std::cout << "OpenCL execution time is: " << nanoSeconds / 1000000.0 << "ms" << std::endl;
+    
+
     if (errNum != CL_SUCCESS)
     {
         std::cerr << "Error queuing kernel for execution." << std::endl;
