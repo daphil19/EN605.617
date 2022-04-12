@@ -241,7 +241,7 @@ void perform_kernel(cl_context& context, cl_command_queue& commandQueue, cl_prog
     for (int i = 0; i < ARRAY_SIZE; i++)
     {
         a[i] = (float)i;
-        b[i] = (float)(i * 2);
+        b[i] = (float)(rand() % MAX_RANDOM_SIZE);
     }
 
     // Create OpenCL program from HelloWorld.cl kernel source
@@ -333,11 +333,22 @@ int main(int argc, char** argv)
         return 1;
     }
 
+    std::cout << "Executing hello_kernel" << std::endl;
     perform_kernel(context, commandQueue, program, memObjects, "hello_kernel");
+
+    std::cout << "Executing add_kernel" << std::endl;
     perform_kernel(context, commandQueue, program, memObjects, "add_kernel");
+
+    std::cout << "Executing sub_kernel" << std::endl;
     perform_kernel(context, commandQueue, program, memObjects, "sub_kernel");
+
+    std::cout << "Executing mult_kernel" << std::endl;
     perform_kernel(context, commandQueue, program, memObjects, "mult_kernel");
+
+    std::cout << "Executing div_kernel" << std::endl;
     perform_kernel(context, commandQueue, program, memObjects, "div_kernel");
+
+    std::cout << "Executing pow_kernel" << std::endl;
     perform_kernel(context, commandQueue, program, memObjects, "pow_kernel");
 
     std::cout << std::endl;
