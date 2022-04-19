@@ -19,6 +19,8 @@
 #include <sstream>
 #include <string>
 
+#include <cmath>
+
 #ifdef __APPLE__
 #include <OpenCL/cl.h>
 #else
@@ -30,33 +32,43 @@
 #endif
 
 // Constants
-const unsigned int inputSignalWidth  = 8;
-const unsigned int inputSignalHeight = 8;
+const int MAX_RANDOM = 10;
 
-cl_uint inputSignal[inputSignalHeight][inputSignalWidth] =
-{
-	{3, 1, 1, 4, 8, 2, 1, 3},
-	{4, 2, 1, 1, 2, 1, 2, 3},
-	{4, 4, 4, 4, 3, 2, 2, 2},
-	{9, 8, 3, 8, 9, 0, 0, 0},
-	{9, 3, 3, 9, 0, 0, 0, 0},
-	{0, 9, 0, 8, 0, 0, 0, 0},
-	{3, 0, 8, 8, 9, 4, 4, 4},
-	{5, 9, 8, 1, 8, 1, 1, 1}
-};
+template <size_t signalHeight, size_t signalWidth>
+void createSignal(cl_uint (&signal)[signalHeight][signalWidth]) {
+	for (int i = 0; i < signalHeight; i++) {
+		for (int j = 0; j < signalWidth; j++) {
+			signal[i][j] = rand() % MAX_RANDOM;
+		}
+	}
+}
 
-const unsigned int outputSignalWidth  = 6;
-const unsigned int outputSignalHeight = 6;
+void foo(cl_uint **signal) {
 
-cl_uint outputSignal[outputSignalHeight][outputSignalWidth];
+}
 
-const unsigned int maskWidth  = 3;
-const unsigned int maskHeight = 3;
+template <size_t maskHeight, size_t maskWidth>
+void createMask(cl_uint (&mask)[maskHeight][maskWidth]) {
+	// this logic assumes that dimensions will always be odd
+	// (and possibly with a corrolary that they're square)
+	// so that there is a true center
+	int centerRow = maskHeight / 2;
+	int centerCol = maskWidth / 2;
 
-cl_uint mask[maskHeight][maskWidth] =
-{
-	{1, 1, 1}, {1, 0, 1}, {1, 1, 1},
-};
+	for (int i = 0; i < maskHeight; i++) {
+		for (int j = 0; j < maskWidth; j++) {
+			int rowDist = abs(centerRow - i);
+			int colDist = abs(centerCol - j);
+
+			// the highest intensity is at the center (center intex + 1)
+			// each "unit" distance away has a lower insensity, until the outer
+			// perimiter, which has a value of 1
+			// determining the "distance" is simlpy the larger of the row and
+			// column distances (this is because we are using a box)
+			mask[i][j] = centerRow + 1 - std::max(rowDist, colDist);
+		}
+	}
+}
 
 ///
 // Function to check and handle OpenCL errors
@@ -79,6 +91,137 @@ void CL_CALLBACK contextCallback(
 	// should really perform any clearup and so on at this point
 	// but for simplicitly just exit.
 	exit(1);
+}
+
+template <size_t size>
+void print(cl_uint (&data)[size][size]) {
+	for (int y = 0; y < size; y++)
+	{
+		for (int x = 0; x < size; x++)
+		{
+			std::cout << data[y][x] << " ";
+		}
+		std::cout << std::endl;
+	}
+}
+
+template <size_t signalSize, size_t maskSize>
+void performFilter(cl_context &context, cl_kernel &kernel, cl_command_queue &queue, cl_device_id * deviceIDs) {
+	cl_int errNum;
+	cl_mem inputSignalBuffer;
+	cl_mem outputSignalBuffer;
+	cl_mem maskBuffer;
+
+	cl_uint inputSignal[signalSize][signalSize];
+	cl_uint mask[maskSize][maskSize];
+
+	createSignal<signalSize, signalSize>(inputSignal);
+	
+	std::cout << "signal:" << std::endl;
+	print<signalSize>(inputSignal);
+	
+	createMask<maskSize, maskSize>(mask);
+
+	std::cout << "mask:" << std::endl;
+	print<maskSize>(mask);
+
+	const unsigned int outputSignalSize = signalSize - maskSize + 1;
+
+	cl_uint outputSignal[outputSignalSize][outputSignalSize];
+
+	// Now allocate buffers
+	inputSignalBuffer = clCreateBuffer(
+		context,
+		CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+		sizeof(cl_uint) * signalSize * signalSize,
+		static_cast<void *>(inputSignal),
+		&errNum);
+	checkErr(errNum, "clCreateBuffer(inputSignal)");
+
+	maskBuffer = clCreateBuffer(
+		context,
+		CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+		sizeof(cl_uint) * maskSize * maskSize,
+		static_cast<void *>(mask),
+		&errNum);
+	checkErr(errNum, "clCreateBuffer(mask)");
+
+	outputSignalBuffer = clCreateBuffer(
+		context,
+		CL_MEM_WRITE_ONLY,
+		sizeof(cl_uint) * outputSignalSize * outputSignalSize,
+		NULL,
+		&errNum);
+	checkErr(errNum, "clCreateBuffer(outputSignal)");
+
+	queue = clCreateCommandQueue(
+		context,
+		deviceIDs[0],
+		CL_QUEUE_PROFILING_ENABLE,
+		&errNum);
+	checkErr(errNum, "clCreateCommandQueue");
+
+	// needed to create these so that their addresses could be passed in to the kernel
+	size_t ss = signalSize;
+	size_t ms = maskSize;
+
+    errNum  = clSetKernelArg(kernel, 0, sizeof(cl_mem), &inputSignalBuffer);
+	errNum |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &maskBuffer);
+    errNum |= clSetKernelArg(kernel, 2, sizeof(cl_mem), &outputSignalBuffer);
+	errNum |= clSetKernelArg(kernel, 3, sizeof(cl_uint), &ss);
+	errNum |= clSetKernelArg(kernel, 4, sizeof(cl_uint), &ms);
+	checkErr(errNum, "clSetKernelArg");
+
+	const size_t globalWorkSize[2] = { outputSignalSize, outputSignalSize };
+    const size_t localWorkSize[2]  = { 1, 1 };
+
+	cl_event event;
+
+    // Queue the kernel up for execution across the array
+    errNum = clEnqueueNDRangeKernel(
+		queue, 
+		kernel, 
+		2,
+		NULL,
+        globalWorkSize, 
+		localWorkSize,
+        0, 
+		NULL, 
+		&event);
+	checkErr(errNum, "clEnqueueNDRangeKernel");
+    
+	clWaitForEvents(1, &event);
+	clFinish(queue);
+
+	errNum = clEnqueueReadBuffer(
+		queue, 
+		outputSignalBuffer, 
+		CL_TRUE,
+        0, 
+		sizeof(cl_uint) * outputSignalSize * outputSignalSize, 
+		outputSignal,
+        0, 
+		NULL, 
+		NULL);
+	checkErr(errNum, "clEnqueueReadBuffer");
+
+    // Output the result buffer
+	std::cout << "output:" << std::endl;
+	print<outputSignalSize>(outputSignal);
+
+	cl_ulong time_start;
+    cl_ulong time_end;
+
+    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
+    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
+
+    double nanoSeconds = time_end-time_start;
+    std::cout << "OpenCL execution time is: " << nanoSeconds / 1000000.0 << "ms" << std::endl;
+
+	// cleanup
+	clReleaseMemObject(inputSignalBuffer);
+	clReleaseMemObject(maskBuffer);
+	clReleaseMemObject(outputSignalBuffer);
 }
 
 ///
@@ -216,83 +359,23 @@ int main(int argc, char** argv)
 		&errNum);
 	checkErr(errNum, "clCreateKernel");
 
-	// Now allocate buffers
-	inputSignalBuffer = clCreateBuffer(
-		context,
-		CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-		sizeof(cl_uint) * inputSignalHeight * inputSignalWidth,
-		static_cast<void *>(inputSignal),
-		&errNum);
-	checkErr(errNum, "clCreateBuffer(inputSignal)");
-
-	maskBuffer = clCreateBuffer(
-		context,
-		CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-		sizeof(cl_uint) * maskHeight * maskWidth,
-		static_cast<void *>(mask),
-		&errNum);
-	checkErr(errNum, "clCreateBuffer(mask)");
-
-	outputSignalBuffer = clCreateBuffer(
-		context,
-		CL_MEM_WRITE_ONLY,
-		sizeof(cl_uint) * outputSignalHeight * outputSignalWidth,
-		NULL,
-		&errNum);
-	checkErr(errNum, "clCreateBuffer(outputSignal)");
-
 	// Pick the first device and create command queue.
 	queue = clCreateCommandQueue(
 		context,
 		deviceIDs[0],
-		0,
+		CL_QUEUE_PROFILING_ENABLE,
 		&errNum);
 	checkErr(errNum, "clCreateCommandQueue");
 
-    errNum  = clSetKernelArg(kernel, 0, sizeof(cl_mem), &inputSignalBuffer);
-	errNum |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &maskBuffer);
-    errNum |= clSetKernelArg(kernel, 2, sizeof(cl_mem), &outputSignalBuffer);
-	errNum |= clSetKernelArg(kernel, 3, sizeof(cl_uint), &inputSignalWidth);
-	errNum |= clSetKernelArg(kernel, 4, sizeof(cl_uint), &maskWidth);
-	checkErr(errNum, "clSetKernelArg");
+	performFilter<8, 3>(context, kernel, queue, deviceIDs);
 
-	const size_t globalWorkSize[2] = { outputSignalWidth, outputSignalHeight };
-    const size_t localWorkSize[2]  = { 1, 1 };
+	performFilter<49, 7>(context, kernel, queue, deviceIDs);
 
-    // Queue the kernel up for execution across the array
-    errNum = clEnqueueNDRangeKernel(
-		queue, 
-		kernel, 
-		2,
-		NULL,
-        globalWorkSize, 
-		localWorkSize,
-        0, 
-		NULL, 
-		NULL);
-	checkErr(errNum, "clEnqueueNDRangeKernel");
-    
-	errNum = clEnqueueReadBuffer(
-		queue, 
-		outputSignalBuffer, 
-		CL_TRUE,
-        0, 
-		sizeof(cl_uint) * outputSignalHeight * outputSignalHeight, 
-		outputSignal,
-        0, 
-		NULL, 
-		NULL);
-	checkErr(errNum, "clEnqueueReadBuffer");
-
-    // Output the result buffer
-    for (int y = 0; y < outputSignalHeight; y++)
-	{
-		for (int x = 0; x < outputSignalWidth; x++)
-		{
-			std::cout << outputSignal[y][x] << " ";
-		}
-		std::cout << std::endl;
-	}
+	// cleanup
+	clReleaseCommandQueue(queue);
+	clReleaseKernel(kernel);
+	clReleaseProgram(program);
+	clReleaseContext(context);
 
     std::cout << std::endl << "Executed program succesfully." << std::endl;
 
