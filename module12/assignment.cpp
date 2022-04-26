@@ -22,26 +22,10 @@ checkErr(cl_int err, const char *name)
     }
 }
 
-void initializeDevices(int &platform, cl_uint &numPlatforms, cl_uint &numDevices, cl_platform_id *platformIDs, cl_device_id *deviceIDs) {
-    cl_int errNum;
+void createProgram(int &platform, cl_uint &numDevices, cl_platform_id *platformIDs, cl_device_id *deviceIDs, cl_context &context, cl_program &program) {
+cl_int errNum;
 
-    // First, select an OpenCL platform to run on.
-    errNum = clGetPlatformIDs(0, NULL, &numPlatforms);
-    checkErr(
-        (errNum != CL_SUCCESS) ? errNum : (numPlatforms <= 0 ? -1 : CL_SUCCESS),
-        "clGetPlatformIDs");
-
-    platformIDs = (cl_platform_id *)alloca(
-        sizeof(cl_platform_id) * numPlatforms);
-
-    std::cout << "Number of platforms: \t" << numPlatforms << std::endl;
-
-    errNum = clGetPlatformIDs(numPlatforms, platformIDs, NULL);
-    checkErr(
-        (errNum != CL_SUCCESS) ? errNum : (numPlatforms <= 0 ? -1 : CL_SUCCESS),
-        "clGetPlatformIDs");
-
-    std::ifstream srcFile("filter.cl");
+        std::ifstream srcFile("filter.cl");
     checkErr(srcFile.is_open() ? CL_SUCCESS : -1, "reading filter.cl");
 
     std::string srcProg(
@@ -51,107 +35,7 @@ void initializeDevices(int &platform, cl_uint &numPlatforms, cl_uint &numDevices
     const char *src = srcProg.c_str();
     size_t length = srcProg.length();
 
-    deviceIDs = NULL;
-    DisplayPlatformInfo(
-        platformIDs[platform],
-        CL_PLATFORM_VENDOR,
-        "CL_PLATFORM_VENDOR");
-
-    errNum = clGetDeviceIDs(
-        platformIDs[platform],
-        CL_DEVICE_TYPE_ALL,
-        0,
-        NULL,
-        &numDevices);
-    if (errNum != CL_SUCCESS && errNum != CL_DEVICE_NOT_FOUND)
-    {
-        checkErr(errNum, "clGetDeviceIDs");
-    }
-
-    deviceIDs = (cl_device_id *)alloca(sizeof(cl_device_id) * numDevices);
-    errNum = clGetDeviceIDs(
-        platformIDs[platform],
-        CL_DEVICE_TYPE_ALL,
-        numDevices,
-        &deviceIDs[0],
-        NULL);
-    checkErr(errNum, "clGetDeviceIDs");
-}
-
-///
-//	main() for simple buffer and sub-buffer example
-//
-int main(int argc, char **argv)
-{
-    cl_int errNum;
-    cl_uint numPlatforms;
-    cl_uint numDevices;
-    cl_platform_id *platformIDs;
-    cl_device_id *deviceIDs;
-    cl_context context;
-    cl_program program;
-    std::vector<cl_kernel> kernels;
-    std::vector<cl_command_queue> queues;
-    std::vector<cl_mem> buffers;
-    int *inputOutput;
-
-    int platform = 0;
-
-    // initializeDevices(platform, numPlatforms, numDevices, platformIDs, deviceIDs);
-
-    // First, select an OpenCL platform to run on.
-    errNum = clGetPlatformIDs(0, NULL, &numPlatforms);
-    checkErr(
-        (errNum != CL_SUCCESS) ? errNum : (numPlatforms <= 0 ? -1 : CL_SUCCESS),
-        "clGetPlatformIDs");
-
-    platformIDs = (cl_platform_id *)alloca(
-        sizeof(cl_platform_id) * numPlatforms);
-
-    std::cout << "Number of platforms: \t" << numPlatforms << std::endl;
-
-    errNum = clGetPlatformIDs(numPlatforms, platformIDs, NULL);
-    checkErr(
-        (errNum != CL_SUCCESS) ? errNum : (numPlatforms <= 0 ? -1 : CL_SUCCESS),
-        "clGetPlatformIDs");
-
-    std::ifstream srcFile("filter.cl");
-    checkErr(srcFile.is_open() ? CL_SUCCESS : -1, "reading filter.cl");
-
-    std::string srcProg(
-        std::istreambuf_iterator<char>(srcFile),
-        (std::istreambuf_iterator<char>()));
-
-    const char *src = srcProg.c_str();
-    size_t length = srcProg.length();
-
-    deviceIDs = NULL;
-    DisplayPlatformInfo(
-        platformIDs[platform],
-        CL_PLATFORM_VENDOR,
-        "CL_PLATFORM_VENDOR");
-
-    errNum = clGetDeviceIDs(
-        platformIDs[platform],
-        CL_DEVICE_TYPE_ALL,
-        0,
-        NULL,
-        &numDevices);
-    if (errNum != CL_SUCCESS && errNum != CL_DEVICE_NOT_FOUND)
-    {
-        checkErr(errNum, "clGetDeviceIDs");
-    }
-
-    deviceIDs = (cl_device_id *)alloca(sizeof(cl_device_id) * numDevices);
-    errNum = clGetDeviceIDs(
-        platformIDs[platform],
-        CL_DEVICE_TYPE_ALL,
-        numDevices,
-        &deviceIDs[0],
-        NULL);
-    checkErr(errNum, "clGetDeviceIDs");
-
-    cl_context_properties contextProperties[] =
+        cl_context_properties contextProperties[] =
         {
             CL_CONTEXT_PLATFORM,
             (cl_context_properties)platformIDs[platform],
@@ -199,8 +83,71 @@ int main(int argc, char **argv)
         std::cerr << buildLog;
         checkErr(errNum, "clBuildProgram");
     }
+}
 
-    std::cout << NUM_BUFFER_ELEMENTS * numDevices << std::endl;
+///
+//	main() for simple buffer and sub-buffer example
+//
+int main(int argc, char **argv)
+{
+    cl_int errNum;
+    cl_uint numPlatforms;
+    cl_uint numDevices;
+    cl_platform_id *platformIDs;
+    cl_device_id *deviceIDs;
+    cl_context context;
+    cl_program program;
+    std::vector<cl_kernel> kernels;
+    std::vector<cl_command_queue> queues;
+    std::vector<cl_mem> buffers;
+    int *inputOutput;
+
+    int platform = 0;
+
+    // First, select an OpenCL platform to run on.
+    errNum = clGetPlatformIDs(0, NULL, &numPlatforms);
+    checkErr(
+        (errNum != CL_SUCCESS) ? errNum : (numPlatforms <= 0 ? -1 : CL_SUCCESS),
+        "clGetPlatformIDs");
+
+    platformIDs = (cl_platform_id *)alloca(
+        sizeof(cl_platform_id) * numPlatforms);
+
+    std::cout << "Number of platforms: \t" << numPlatforms << std::endl;
+
+    errNum = clGetPlatformIDs(numPlatforms, platformIDs, NULL);
+    checkErr(
+        (errNum != CL_SUCCESS) ? errNum : (numPlatforms <= 0 ? -1 : CL_SUCCESS),
+        "clGetPlatformIDs");
+
+    deviceIDs = NULL;
+    DisplayPlatformInfo(
+        platformIDs[platform],
+        CL_PLATFORM_VENDOR,
+        "CL_PLATFORM_VENDOR");
+
+    errNum = clGetDeviceIDs(
+        platformIDs[platform],
+        CL_DEVICE_TYPE_ALL,
+        0,
+        NULL,
+        &numDevices);
+    if (errNum != CL_SUCCESS && errNum != CL_DEVICE_NOT_FOUND)
+    {
+        checkErr(errNum, "clGetDeviceIDs");
+    }
+
+    deviceIDs = (cl_device_id *)alloca(sizeof(cl_device_id) * numDevices);
+    errNum = clGetDeviceIDs(
+        platformIDs[platform],
+        CL_DEVICE_TYPE_ALL,
+        numDevices,
+        &deviceIDs[0],
+        NULL);
+    checkErr(errNum, "clGetDeviceIDs");
+
+    createProgram(platform, numDevices, platformIDs, deviceIDs, context, program);
+
     inputOutput = new int[NUM_BUFFER_ELEMENTS * numDevices];
     for (unsigned int i = 0; i < NUM_BUFFER_ELEMENTS * numDevices; i++)
     {
@@ -216,7 +163,6 @@ int main(int argc, char **argv)
         &errNum);
     checkErr(errNum, "clCreateBuffer");
 
-    // TODO so here is where we would create the sub buffers
     for (unsigned int i = 0; i < NUM_SUB_BUFFERS; i++)
     {
         // here, we create sub-buffers that each take a portion of the main buffer
@@ -247,7 +193,7 @@ int main(int argc, char **argv)
             clCreateCommandQueue(
                 context,
                 deviceIDs[0],
-                0,
+                CL_QUEUE_PROFILING_ENABLE,
                 &errNum);
         checkErr(errNum, "clCreateCommandQueue");
 
@@ -269,7 +215,6 @@ int main(int argc, char **argv)
         kernels.push_back(kernel);
     }
 
-    // is this good?
     errNum = clEnqueueWriteBuffer(
         queues[numDevices - 1],
         main_buffer,
@@ -307,6 +252,13 @@ int main(int argc, char **argv)
     // with in-order queue.
     clWaitForEvents(events.size(), &events[0]);
 
+	cl_ulong time_start;
+    cl_ulong time_end;
+
+    clGetEventProfilingInfo(events[0], CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
+    clGetEventProfilingInfo(events[events.size() - 1], CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
+
+
     // Read back computed data
     clEnqueueReadBuffer(
         queues[numDevices - 1],
@@ -329,6 +281,9 @@ int main(int argc, char **argv)
 
         std::cout << std::endl;
     }
+
+    double nanoSeconds = time_end-time_start;
+    std::cout << "OpenCL execution time is: " << nanoSeconds / 1000000.0 << "ms" << std::endl;
 
     std::cout << "Program completed successfully" << std::endl;
 

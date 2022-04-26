@@ -1,0 +1,9 @@
+Number of platforms: 	1
+	CL_PLATFORM_VENDOR:	NVIDIA Corporation
+		CL_DEVICE_TYPE:	CL_DEVICE_TYPE_GPU
+		CL_DEVICE_TYPE:	CL_DEVICE_TYPE_GPU
+		CL_DEVICE_TYPE:	CL_DEVICE_TYPE_GPU
+		CL_DEVICE_TYPE:	CL_DEVICE_TYPE_GPU
+ 1 1 1 1 5 5 5 5 9 9 9 9 13 13 13 13
+OpenCL execution time is: 0.04096ms
+Program completed successfully
