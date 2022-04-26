@@ -182,7 +182,12 @@ int main(int argc, char** argv)
             checkErr(errNum, "clBuildProgram");
     }
 
+    // TODO here is where we are now!
+
+    numDevices = 2;
+
     // create buffers and sub-buffers
+    std::cout << NUM_BUFFER_ELEMENTS * numDevices << std::endl;
     inputOutput = new int[NUM_BUFFER_ELEMENTS * numDevices];
     for (unsigned int i = 0; i < NUM_BUFFER_ELEMENTS * numDevices; i++)
     {
@@ -201,6 +206,8 @@ int main(int argc, char** argv)
     // now for all devices other than the first create a sub-buffer
     for (unsigned int i = 0; i < numDevices; i++)
     {
+        // TODO do we just need to change this region?
+        std::cout << NUM_BUFFER_ELEMENTS * i << ", " << NUM_BUFFER_ELEMENTS << std::endl;
         cl_buffer_region region = 
             {
                 NUM_BUFFER_ELEMENTS * i * sizeof(int), 
@@ -221,14 +228,14 @@ int main(int argc, char** argv)
     for (unsigned int i = 0; i < numDevices; i++)
     {
         InfoDevice<cl_device_type>::display(
-            deviceIDs[i], 
+            deviceIDs[0], 
             CL_DEVICE_TYPE, 
             "CL_DEVICE_TYPE");
 
         cl_command_queue queue = 
             clCreateCommandQueue(
                 context,
-                deviceIDs[i],
+                deviceIDs[0],
                 0,
                 &errNum);
         checkErr(errNum, "clCreateCommandQueue");
